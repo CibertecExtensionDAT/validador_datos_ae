@@ -1099,6 +1099,15 @@ def comparar_evaluadores(df_base, df_revisar):
     
     return errores
 
+def agregar_columna_nro(df):
+    """Agrega columna Nro. al DataFrame si no existe, o la recalcula si existe"""
+    # Eliminar columna Nro. si ya existe (por si acaso)
+    if "Nro." in df.columns:
+        df = df.drop(columns=["Nro."])
+    # Insertar columna Nro. al inicio
+    df.insert(0, "Nro.", range(1, len(df) + 1))
+    return df
+
 # ================================================
 # INTERFAZ PRINCIPAL CON TABS
 # ================================================
@@ -1305,7 +1314,7 @@ with tab1:
                                 # Mostrar preview
                                 st.markdown("### 📊 Vista Previa de Datos")
                                 st.info(f"Total de registros: {len(df)}")
-                                st.dataframe(df.head(10), use_container_width=True, hide_index=True)
+                                st.dataframe(df, use_container_width=True, hide_index=True)
                             
                             # Botones de acción
                             col1, col2 = st.columns(2)
@@ -1444,7 +1453,7 @@ with tab1:
                                         # Mostrar preview
                                         st.markdown("### 📊 Vista Previa de Datos")
                                         st.info(f"Total de registros: {len(df)}")
-                                        st.dataframe(df.head(10), use_container_width=True, hide_index=True)
+                                        st.dataframe(df, use_container_width=True, hide_index=True)
                                     
                                     # Botones de acción
                                     col1, col2 = st.columns(2)
@@ -1548,6 +1557,7 @@ with tab1:
                     # PROCESAR HOJA 1P-3P (Solo mayúsculas)
                     # ====================================
                     df_1p3p_procesado = None
+
                     if tiene_1p3p:
                         st.markdown("### 📘 Procesando Hoja: 1P-3P")
                         
@@ -1614,7 +1624,7 @@ with tab1:
                                 st.dataframe(
                                     df_errores_fatales_1p3p,
                                     use_container_width=True,
-                                    height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                    height=220
                                 )
                                     
                                 st.caption(f"🔎 Total de errores: {len(errores_validacion_1p3p)}")
@@ -1626,7 +1636,7 @@ with tab1:
                             # Validar cursos en 1P-3P
                             cursos_invalidos_1p3p = sorted(df_1p3p.loc[~df_1p3p["CURSO"].isin(st.session_state.cursos_equivalentes), "CURSO"].unique())
                             
-                            if len(cursos_invalidos_1p3p) > 0:
+                            if len(cursos_invalidos_1p3p) > 0 and st.session_state.archivo2_1p3p_df is None:
                                 st.warning(f"⚠️ Se detectaron {len(cursos_invalidos_1p3p)} cursos no reconocidos en 1P-3P")
                                 
                                 with st.form("equivalencias_form_1p3p"):
@@ -1661,13 +1671,11 @@ with tab1:
                                             
                                             # Guardar en session_state
                                             st.session_state.archivo2_1p3p_df = df_1p3p
-                                            st.session_state.archivo2_1p3p_df.insert(0, 'Nro.', range(1, len(st.session_state.archivo2_1p3p_df) + 1))
-                                            
                                             st.success("✅ Cursos homologados correctamente en 1P-3P")
                                             st.rerun()
                             
                             # Si no hay cursos inválidos
-                            if len(cursos_invalidos_1p3p) == 0 or st.session_state.archivo2_1p3p_df is not None:
+                            else:
                                 # Usar el DataFrame guardado si existe, sino usar el actual
                                 if st.session_state.archivo2_1p3p_df is not None:
                                     df_1p3p = st.session_state.archivo2_1p3p_df
@@ -1681,13 +1689,13 @@ with tab1:
                                     df_1p3p = df_1p3p[cols_orden]
                                     
                                     st.session_state.archivo2_1p3p_df = df_1p3p
-                                    st.session_state.archivo2_1p3p_df.insert(0, 'Nro.', range(1, len(st.session_state.archivo2_1p3p_df) + 1))
                                 
+                                # Marcar como procesado
                                 df_1p3p_procesado = df_1p3p
-                                
-                                with st.expander("Vista previa 1P-3P", expanded=False):
-                                    st.info(f"Total de registros: {len(df_1p3p)}")
-                                    st.dataframe(df_1p3p, use_container_width=True, hide_index=True)
+
+                                # Vista previa
+                                st.dataframe(st.session_state.archivo2_1p3p_df, use_container_width=True, hide_index=True)
+                        
                         else:
                             st.error("❌ Error de cabecera en la hoja 1P-3P")
                             st.warning("⚠️ No se pudo detectar cabecera automáticamente en 1P-3P")
@@ -1699,6 +1707,7 @@ with tab1:
                     # PROCESAR HOJA 4P-5S (Homologación completa)
                     # ====================================
                     df_4p5s_procesado = None
+
                     if tiene_4p5s:
                         st.markdown("### 📗 Procesando Hoja: 4P-5S")
                         
@@ -1778,7 +1787,8 @@ with tab1:
                             # Validar cursos
                             cursos_invalidos = sorted(df2.loc[~df2["CURSO"].isin(st.session_state.cursos_equivalentes), "CURSO"].unique())
                             
-                            if len(cursos_invalidos) > 0:
+                            # Si hay cursos inválidos
+                            if len(cursos_invalidos) > 0 and st.session_state.archivo2_4p5s_df is None:
                                 st.warning(f"⚠️ Se detectaron {len(cursos_invalidos)} cursos no reconocidos")
                                 
                                 with st.form("equivalencias_form"):
@@ -1815,30 +1825,31 @@ with tab1:
                                             
                                             # Guardar en session_state
                                             st.session_state.archivo2_4p5s_df = df2
-                                            st.session_state.archivo2_4p5s_df.insert(0, 'Nro.', range(1, len(st.session_state.archivo2_4p5s_df) + 1))
                                             
                                             st.success("✅ Cursos homologados correctamente")
                                             st.rerun()
-                        
-                            # Si no hay cursos inválidos
-                            if len(cursos_invalidos) == 0 or st.session_state.archivo2_4p5s_df is not None:
-                                df2["IDENTIFICADOR"] = crear_identificador(df2, "PATERNO", "MATERNO", "NOMBRES")
-                                df2["NOTAS VIGESIMALES 75%"] = ""
-                                df2["PROMEDIO"] = ""
-                                
-                                # Reordenar columnas
-                                cols_orden = [c for c in df2.columns if c != "IDENTIFICADOR"]
-                                cols_orden.append("IDENTIFICADOR")
-                                df2 = df2[cols_orden]
-                                
-                                st.session_state.archivo2_4p5s_df = df2
-                                st.session_state.archivo2_4p5s_df.insert(0, 'Nro.', range(1, len(st.session_state.archivo2_4p5s_df) + 1))
-                                
+                            else:
+                                # Usar el DataFrame guardado si existe, sino procesar el actual
+                                if st.session_state.archivo2_4p5s_df is not None:
+                                    df2 = st.session_state.archivo2_4p5s_df
+                                else:
+                                    df2["IDENTIFICADOR"] = crear_identificador(df2, "PATERNO", "MATERNO", "NOMBRES")
+                                    df2["NOTAS VIGESIMALES 75%"] = ""
+                                    df2["PROMEDIO"] = ""
+                                    
+                                    # Reordenar columnas
+                                    cols_orden = [c for c in df2.columns if c != "IDENTIFICADOR"]
+                                    cols_orden.append("IDENTIFICADOR")
+                                    df2 = df2[cols_orden]
+                                    
+                                    # Guardar en session_state
+                                    st.session_state.archivo2_4p5s_df = df2
+                                    
+                                # Marcar como procesado
                                 df_4p5s_procesado = df2
-
-                                with st.expander("Vista previa 4P-5S", expanded=False):
-                                    st.info(f"Total de registros: {len(df2)}")
-                                    st.dataframe(df2, use_container_width=True, hide_index=True)
+                                
+                                # Vista previa
+                                st.dataframe(st.session_state.archivo2_4p5s_df, use_container_width=True, hide_index=True)
                                     
                         else:
                             st.error("❌ Error de cabecera en la hoja 4P-5S")
@@ -1850,6 +1861,13 @@ with tab1:
                     # ====================================
                     # SECCIÓN DE DESCARGA
                     # ====================================
+                    # Agregar columna Nro. una sola vez antes de generar descargas
+                    if st.session_state.archivo2_1p3p_df is not None:
+                        st.session_state.archivo2_1p3p_df = agregar_columna_nro(st.session_state.archivo2_1p3p_df)
+                    if st.session_state.archivo2_4p5s_df is not None:
+                        st.session_state.archivo2_4p5s_df = agregar_columna_nro(st.session_state.archivo2_4p5s_df)
+
+                    # Validación
                     if df_1p3p_procesado is not None or df_4p5s_procesado is not None:
                         st.divider()
                         st.markdown("### 💾 Archivos Listos para Descargar")
