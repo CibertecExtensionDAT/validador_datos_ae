@@ -5,10 +5,11 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import re
+from openpyxl import Workbook
+from copy import copy
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 # ================================================
 # CONFIGURACIÓN INICIAL
@@ -1124,6 +1125,125 @@ def agregar_columna_nro(df):
     df.insert(0, "Nro.", range(1, len(df) + 1))
     return df
 
+# Funciones para CERTIFICADOS
+def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_procesadas):
+    """
+    Guarda archivo de certificado preservando las primeras 6 filas del formato institucional
+    y agregando nuestra cabecera personalizada en la fila 7.
+    
+    Args:
+        archivo_original_bytes: Bytes del archivo Excel original
+        dict_hojas_procesadas: Diccionario con formato igual a guardar_evaluador_con_multiples_hojas
+    
+    Returns:
+        BytesIO con el archivo de certificado
+    """
+    
+    # Cargar el workbook original para copiar el formato de las primeras 6 filas
+    wb_original = load_workbook(BytesIO(archivo_original_bytes))
+    
+    # Crear un nuevo workbook para el certificado
+    wb_nuevo = Workbook()
+    wb_nuevo.remove(wb_nuevo.active)  # Eliminar la hoja por defecto
+    
+    for nombre_hoja, datos in dict_hojas_procesadas.items():
+        df_procesado = datos['df']
+        
+        # Crear nueva hoja
+        ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
+        
+        # Si la hoja existe en el original, copiar las primeras 6 filas
+        if nombre_hoja in wb_original.sheetnames:
+            ws_original = wb_original[nombre_hoja]
+            
+            # Copiar las primeras 6 filas con su formato
+            for fila_idx in range(1, 7):
+                for col_idx in range(1, ws_original.max_column + 1):
+                    celda_original = ws_original.cell(row=fila_idx, column=col_idx)
+                    celda_nueva = ws_nueva.cell(row=fila_idx, column=col_idx)
+                    
+                    # Copiar valor
+                    celda_nueva.value = celda_original.value
+                    
+                    # Copiar formato de manera segura
+                    try:
+                        # Copiar fill
+                        if celda_original.fill and celda_original.fill.start_color:
+                            celda_nueva.fill = copy(celda_original.fill)
+                    except:
+                        pass
+                    
+                    try:
+                        # Copiar font
+                        if celda_original.font:
+                            celda_nueva.font = copy(celda_original.font)
+                    except:
+                        pass
+                    
+                    try:
+                        # Copiar alignment
+                        if celda_original.alignment:
+                            celda_nueva.alignment = copy(celda_original.alignment)
+                    except:
+                        pass
+                    
+                    try:
+                        # Copiar border
+                        if celda_original.border:
+                            celda_nueva.border = copy(celda_original.border)
+                    except:
+                        pass
+                    
+                    try:
+                        # Copiar number format
+                        if celda_original.number_format:
+                            celda_nueva.number_format = celda_original.number_format
+                    except:
+                        pass
+            
+            # Copiar merges de las primeras 6 filas
+            try:
+                for merged_range in ws_original.merged_cells.ranges:
+                    if merged_range.min_row <= 6:
+                        ws_nueva.merge_cells(str(merged_range))
+            except:
+                pass
+        
+        # Agregar cabecera personalizada en fila 7
+        fila_cabecera = 7
+        
+        # Estilo para la cabecera
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=10)
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        
+        for col_idx, columna in enumerate(df_procesado.columns, start=1):
+            celda = ws_nueva.cell(row=fila_cabecera, column=col_idx)
+            celda.value = columna
+            celda.fill = header_fill
+            celda.font = header_font
+            celda.alignment = header_alignment
+        
+        # Agregar datos a partir de la fila 8
+        fila_inicio_datos = 8
+        for row_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
+            for col_idx, value in enumerate(row, start=1):
+                celda = ws_nueva.cell(row=row_idx, column=col_idx)
+                celda.value = value
+                celda.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Ajustar ancho de columnas
+        for col_idx, columna in enumerate(df_procesado.columns, start=1):
+            col_letter = ws_nueva.cell(row=1, column=col_idx).column_letter
+            ws_nueva.column_dimensions[col_letter].width = 15
+    
+    # Guardar en BytesIO
+    buffer = BytesIO()
+    wb_nuevo.save(buffer)
+    buffer.seek(0)
+    
+    return buffer
+
 # ================================================
 # INTERFAZ PRINCIPAL CON TABS
 # ================================================
@@ -1989,7 +2109,7 @@ with tab1:
                             
                         # TRES BOTONES DE DESCARGA PARA ARCHIVOS EVALUADORES
                         st.markdown("#### 📋 Archivos Evaluadores")
-                        col_eval1, col_eval2, col_eval3 = st.columns(3)
+                        col_eval1, col_eval2, col_eval3, col_eval4 = st.columns(4)
                             
                         # BOTÓN 1: ARCHIVO "ACTUAL" (todas las filas)
                         with col_eval1:
@@ -2095,6 +2215,155 @@ with tab1:
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                 use_container_width=True,
                                 help="Descarga solo las filas con OBSERVACIONES vacío (aprobados)"
+                            )
+
+                        # BOTÓN 4: ARCHIVO "CERTIFICADOS"
+                        with col_eval4:
+                            # Crear archivo CERTIFICADO con formato especial
+                            dict_hojas_certificado = {}
+                            
+                            # Columnas requeridas para el certificado (orden final)
+                            columnas_certificado = [
+                                'nro', 'paterno', 'materno', 'nombre', 'grado', 'sección', 'curso', 
+                                'nota lab', 'lista de asistencia', 'nota de examen cibertec', 'nota final', 
+                                'observación sobre nota desaprobatoria', 'status', 'numeración', 'horas_progresivo'
+                            ]
+                            
+                            if "1P-3P" in dict_hojas_evaluador:
+                                df_cert_1p3p = dict_hojas_evaluador["1P-3P"]['df'].copy()
+                                
+                                # DEBUG: Ver columnas actuales
+                                # st.write("Columnas originales 1P-3P:", df_cert_1p3p.columns.tolist())
+                                
+                                # Normalizar nombres de columnas (eliminar espacios extras)
+                                df_cert_1p3p.columns = df_cert_1p3p.columns.str.strip()
+                                
+                                # Mapear columnas originales a nuevas (case-insensitive y considerando variaciones)
+                                mapeo_columnas = {}
+                                for col in df_cert_1p3p.columns:
+                                    col_upper = col.upper().strip()
+                                    
+                                    if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
+                                        mapeo_columnas[col] = 'nro'
+                                    elif col_upper == 'PATERNO':
+                                        mapeo_columnas[col] = 'paterno'
+                                    elif col_upper == 'MATERNO':
+                                        mapeo_columnas[col] = 'materno'
+                                    elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
+                                        mapeo_columnas[col] = 'nombre'
+                                    elif col_upper == 'CURSO':
+                                        mapeo_columnas[col] = 'curso'
+                                    elif col_upper == 'GRADO':
+                                        mapeo_columnas[col] = 'grado'
+                                    elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
+                                        mapeo_columnas[col] = 'sección'
+                                    elif 'NOTAS VIGESIMALES 75%' in col_upper or ('NOTAS' in col_upper and 'VIGESIMAL' in col_upper and '75' in col_upper):
+                                        mapeo_columnas[col] = 'nota de examen cibertec'
+                                
+                                df_cert_1p3p = df_cert_1p3p.rename(columns=mapeo_columnas)
+                                
+                                # Eliminar columnas no necesarias
+                                columnas_a_eliminar = []
+                                for col in df_cert_1p3p.columns:
+                                    col_upper = col.upper()
+                                    if 'NOTA VIGESIMAL' in col_upper and 'nota de examen cibertec' not in col:
+                                        columnas_a_eliminar.append(col)
+                                    elif 'PROMEDIO' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                    elif 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                
+                                df_cert_1p3p = df_cert_1p3p.drop(columns=columnas_a_eliminar, errors='ignore')
+                                
+                                # Agregar nuevas columnas vacías
+                                nuevas_columnas = ['nota lab', 'lista de asistencia', 'nota final', 
+                                                 'observación sobre nota desaprobatoria', 'status', 
+                                                 'numeración', 'horas_progresivo']
+                                for col in nuevas_columnas:
+                                    if col not in df_cert_1p3p.columns:
+                                        df_cert_1p3p[col] = ''
+                                
+                                # Reordenar solo las columnas que existen
+                                columnas_existentes = [col for col in columnas_certificado if col in df_cert_1p3p.columns]
+                                df_cert_1p3p = df_cert_1p3p[columnas_existentes]
+                                
+                                dict_hojas_certificado["1P-3P"] = {
+                                    'df': df_cert_1p3p,
+                                    'fila_cabecera': dict_hojas_evaluador["1P-3P"]['fila_cabecera']
+                                }
+                            
+                            if "4P-5S" in dict_hojas_evaluador:
+                                df_cert_4p5s = dict_hojas_evaluador["4P-5S"]['df'].copy()
+                                
+                                # Normalizar nombres de columnas
+                                df_cert_4p5s.columns = df_cert_4p5s.columns.str.strip()
+                                
+                                # Mapear columnas originales a nuevas (case-insensitive y considerando variaciones)
+                                mapeo_columnas = {}
+                                for col in df_cert_4p5s.columns:
+                                    col_upper = col.upper().strip()
+                                    
+                                    if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
+                                        mapeo_columnas[col] = 'nro'
+                                    elif col_upper == 'PATERNO':
+                                        mapeo_columnas[col] = 'paterno'
+                                    elif col_upper == 'MATERNO':
+                                        mapeo_columnas[col] = 'materno'
+                                    elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
+                                        mapeo_columnas[col] = 'nombre'
+                                    elif col_upper == 'CURSO':
+                                        mapeo_columnas[col] = 'curso'
+                                    elif col_upper == 'GRADO':
+                                        mapeo_columnas[col] = 'grado'
+                                    elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
+                                        mapeo_columnas[col] = 'sección'
+                                    elif 'NOTAS VIGESIMALES 75%' in col_upper or ('NOTAS' in col_upper and 'VIGESIMAL' in col_upper and '75' in col_upper):
+                                        mapeo_columnas[col] = 'nota de examen cibertec'
+                                
+                                df_cert_4p5s = df_cert_4p5s.rename(columns=mapeo_columnas)
+                                
+                                # Eliminar columnas no necesarias
+                                columnas_a_eliminar = []
+                                for col in df_cert_4p5s.columns:
+                                    col_upper = col.upper()
+                                    if 'NOTA VIGESIMAL' in col_upper and 'nota de examen cibertec' not in col:
+                                        columnas_a_eliminar.append(col)
+                                    elif 'PROMEDIO' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                    elif 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                
+                                df_cert_4p5s = df_cert_4p5s.drop(columns=columnas_a_eliminar, errors='ignore')
+                                
+                                # Agregar nuevas columnas vacías
+                                nuevas_columnas = ['nota lab', 'lista de asistencia', 'nota final', 
+                                                 'observación sobre nota desaprobatoria', 'status', 
+                                                 'numeración', 'horas_progresivo']
+                                for col in nuevas_columnas:
+                                    if col not in df_cert_4p5s.columns:
+                                        df_cert_4p5s[col] = ''
+                                
+                                # Reordenar solo las columnas que existen
+                                columnas_existentes = [col for col in columnas_certificado if col in df_cert_4p5s.columns]
+                                df_cert_4p5s = df_cert_4p5s[columnas_existentes]
+                                
+                                dict_hojas_certificado["4P-5S"] = {
+                                    'df': df_cert_4p5s,
+                                    'fila_cabecera': dict_hojas_evaluador["4P-5S"]['fila_cabecera']
+                                }
+                            
+                            buffer_certificado = guardar_certificado_con_encabezado(
+                                archivo_original_bytes=st.session_state.archivo2_bytes,
+                                dict_hojas_procesadas=dict_hojas_certificado
+                            )
+                            
+                            st.download_button(
+                                label="📥 Certificado",
+                                data=buffer_certificado,
+                                file_name=f"{st.session_state.nombre_colegio}_Certificado.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True,
+                                help="Descarga el archivo con formato para certificación (incluye columnas adicionales)"
                             )
                         
                         # Botón de finalización
