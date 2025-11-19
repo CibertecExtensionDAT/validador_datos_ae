@@ -1,7 +1,6 @@
 # ===============================================
 # PASO 1: SUBIDA Y VALIDACIÓN DEL ARCHIVO 1
 # ===============================================
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -21,6 +20,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from zipfile import ZipFile
 from datetime import datetime
 from tempfile import NamedTemporaryFile
+# Librerías de Reporte PDF
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # ================================================
 # CONFIGURACIÓN INICIAL
@@ -922,13 +927,6 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         nombre_colegio: Nombre del colegio para el header
         tipo_archivo: '1P-3P' o '4P-5S'
     """
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
-    from zipfile import ZipFile
     
     with st.spinner("📝 Generando reportes PDF..."):
         # Crear buffer para el ZIP
@@ -1061,7 +1059,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         st.download_button(
             label="📥 Descargar Reportes (ZIP)",
             data=zip_buffer,
-            file_name=f"Reportes_{nombre_colegio}_{tipo_archivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            file_name=f"Reportes_{nombre_colegio}_{tipo_archivo}.zip",
             mime="application/zip",
             use_container_width=True
         )
