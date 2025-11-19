@@ -107,6 +107,10 @@ COLUMNAS_EVALUADOR = [
     "Nota Vigesimal", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
 ]
 
+COLUMNAS_ARCHIVO_PDF = [
+    'Nro.', 'Paterno', 'Materno', 'Nombres', 'Curso', 'Grado', 'Sección', 'Nota Vigesimal'
+]
+
 # Constantes de validación
 SEXO_VALIDO = ["M", "F"]
 SECCIONES_VALIDAS = ["A", "B", "C", "D", "E", "F", "G", "U", "UNICO", "UNICA", "ÚNICO", "ÚNICA", "Único", "Única"]
@@ -907,6 +911,160 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
     wb.save(output)
     output.seek(0)
     return output
+
+# Función para Generar Reporte PDF:
+def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
+    """
+    Genera reportes PDF agrupados por Grado → Sección → Curso
+    
+    Args:
+        df: DataFrame con los datos homologados
+        nombre_colegio: Nombre del colegio para el header
+        tipo_archivo: '1P-3P' o '4P-5S'
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from zipfile import ZipFile
+    
+    with st.spinner("📝 Generando reportes PDF..."):
+        # Crear buffer para el ZIP
+        zip_buffer = BytesIO()
+        
+        # Crear archivo ZIP
+        with ZipFile(zip_buffer, 'w') as zip_file:
+            # Agrupar por Grado, Sección, Curso
+            grupos = df.groupby(['GRADO', 'SECCIÓN', 'CURSO'])
+            total_grupos = len(grupos)
+            progress_bar = st.progress(0)
+            
+            for idx, ((grado, seccion, curso), grupo_df) in enumerate(grupos):
+                # Crear PDF individual
+                pdf_buffer = BytesIO()
+                
+                # Configurar documento
+                doc = SimpleDocTemplate(
+                    pdf_buffer,
+                    pagesize=A4,
+                    rightMargin=15*mm,
+                    leftMargin=15*mm,
+                    topMargin=15*mm,
+                    bottomMargin=15*mm
+                )
+                
+                # Estilos
+                styles = getSampleStyleSheet()
+                style_title = ParagraphStyle(
+                    'CustomTitle',
+                    parent=styles['Heading1'],
+                    fontSize=16,
+                    textColor=colors.HexColor('#1a5490'),
+                    spaceAfter=3*mm,
+                    alignment=TA_CENTER
+                )
+                style_subtitle = ParagraphStyle(
+                    'CustomSubtitle',
+                    parent=styles['Normal'],
+                    fontSize=11,
+                    textColor=colors.HexColor('#2c3e50'),
+                    spaceAfter=2*mm,
+                    alignment=TA_LEFT
+                )
+                
+                # Construir contenido
+                story = []
+                
+                # Header
+                story.append(Paragraph("LISTADO DE ALUMNOS", style_title))
+                story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
+                story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
+                story.append(Paragraph(f"<b>Grado:</b> {grado} | <b>Sección:</b> {seccion}", style_subtitle))
+                story.append(Paragraph(f"<b>Curso:</b> {curso}", style_subtitle))
+                story.append(Spacer(1, 5*mm))
+                
+                # Preparar datos de la tabla
+                grupo_df_sorted = grupo_df.sort_values(['PATERNO', 'MATERNO', 'NOMBRES'])
+                
+                # Crear datos de tabla
+                datos_tabla = [['Nro.', 'Nombres', 'Apellido Paterno', 'Apellido Materno', 'Nota']]
+                
+                for i, (_, row) in enumerate(grupo_df_sorted.iterrows(), 1):
+                    datos_tabla.append([
+                        str(i),
+                        str(row['NOMBRES']),
+                        str(row['PATERNO']),
+                        str(row['MATERNO']),
+                        str(row['NOTA VIGESIMAL'])
+                    ])
+                
+                # Crear tabla
+                tabla = Table(datos_tabla, colWidths=[15*mm, 50*mm, 40*mm, 40*mm, 20*mm])
+                
+                # Estilo de tabla
+                tabla.setStyle(TableStyle([
+                    # Header
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a5490')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    
+                    # Datos
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                    ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # Nro centrado
+                    ('ALIGN', (1, 1), (3, -1), 'LEFT'),    # Nombres izquierda
+                    ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Nota centrada
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 9),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                    
+                    # Bordes
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                ]))
+                
+                story.append(tabla)
+                story.append(Spacer(1, 8*mm))
+                
+                # Footer con estadísticas
+                total_alumnos = len(grupo_df_sorted)
+                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL'], errors='coerce') >= 13])
+                desaprobados = total_alumnos - aprobados
+                
+                story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
+                story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", styles['Normal']))
+                
+                # Generar PDF
+                doc.build(story)
+                
+                # Guardar en ZIP
+                pdf_bytes = pdf_buffer.getvalue()
+                nombre_archivo = f"{grado}_{seccion}_{curso.replace('/', '-')}.pdf"
+                zip_file.writestr(nombre_archivo, pdf_bytes)
+                
+                # Actualizar progreso
+                progress_bar.progress((idx + 1) / total_grupos)
+            
+            progress_bar.empty()
+        
+        # Preparar descarga
+        zip_buffer.seek(0)
+        
+        st.success(f"🎉 {total_grupos} reportes PDF generados correctamente")
+        
+        # Botón de descarga
+        st.download_button(
+            label="📥 Descargar Reportes (ZIP)",
+            data=zip_buffer,
+            file_name=f"Reportes_{nombre_colegio}_{tipo_archivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
 
 # Funciones para Tab de Evaluadores:
 def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
@@ -1884,7 +2042,7 @@ def generar_todos_certificados():
 st.title("📊 Sistema de Validación de Archivos")
 
 # Crear tabs principales
-tab1, tab2, tab3 = st.tabs(["🔍 Validador General", "⚖️ Comparador de Evaluadores", "🎓 Generador de Certificados PDF con Plantillas Automáticas"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador General", "⚖️ Comparador de Evaluadores", "📑 Generador de Reportes PDF", "🎓 Generador de Certificados PDF con Plantillas Automáticas"])
 
 # ================================================
 # TAB 1: VALIDADOR GENERAL
@@ -2640,7 +2798,7 @@ with tab1:
                             st.stop()
 
                     # ====================================
-                    # SECCIÓN DE DESCARGA - MODIFICACIÓN COMPLETA
+                    # SECCIÓN DE DESCARGA
                     # ====================================
 
                     # Validación de hojas procesadas
@@ -2693,8 +2851,27 @@ with tab1:
                                 df_1p3p_ok.insert(0, 'NRO.', range(1, len(df_1p3p_ok) + 1))
                             
                             # Tres columnas para botones 1P-3P
-                            col_1p3p_1, col_1p3p_2, col_1p3p_3 = st.columns(3)
+                            col_1p3p_0, col_1p3p_1, col_1p3p_2, col_1p3p_3 = st.columns(4)
                             
+                            with col_1p3p_0:
+                                # Archivo homologado
+                                df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR"], errors="ignore")
+                                df_sin_notas_1p3p["NOTA VIGESIMAL"] = df_sin_notas_1p3p["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
+                                buffer_1p3p = guardar_con_formato_original(
+                                    df_procesado=df_sin_notas_1p3p,
+                                    archivo_original_bytes=st.session_state.archivo2_bytes,
+                                    nombre_hoja="1P-3P",
+                                    fila_cabecera=st.session_state.archivo2_1p3p_fila_cabecera,
+                                    solo_hoja_especificada=True
+                                )
+                                st.download_button(
+                                    label="📥 1P-3P Homologado",
+                                    data=buffer_1p3p,
+                                    file_name=f"{st.session_state.nombre_colegio}_1P-3P_RV.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+
                             with col_1p3p_1:
                                 # ACTUAL 1P-3P
                                 dict_actual_1p3p = {
@@ -2864,8 +3041,27 @@ with tab1:
                                     df_4p5s_ok['Nro'] = range(1, len(df_4p5s_ok) + 1)
                             
                             # Tres columnas para botones 4P-5S
-                            col_4p5s_1, col_4p5s_2, col_4p5s_3 = st.columns(3)
+                            col_1p3p_0, col_4p5s_1, col_4p5s_2, col_4p5s_3 = st.columns(4)
                             
+                            with col_1p3p_0:
+                                # Archivo homologado
+                                df_sin_notas_4p5s = df_4p5s_procesado.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
+                                df_sin_notas_4p5s["NOTA VIGESIMAL"] = df_sin_notas_4p5s["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
+                                buffer_4p5s = guardar_con_formato_original(
+                                    df_procesado=df_sin_notas_4p5s,
+                                    archivo_original_bytes=st.session_state.archivo2_bytes,
+                                    nombre_hoja="4P-5S",
+                                    fila_cabecera=st.session_state.archivo2_4p5s_fila_cabecera,
+                                    solo_hoja_especificada=True
+                                )
+                                st.download_button(
+                                    label="📥 4P-5S Homologado",
+                                    data=buffer_4p5s,
+                                    file_name=f"{st.session_state.nombre_colegio}_4P-5S_RV.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+
                             with col_4p5s_1:
                                 # ACTUAL 4P-5S
                                 dict_actual_4p5s = {
@@ -2956,8 +3152,7 @@ with tab1:
     # PASO 3: FINALIZACIÓN
     # ================================================
     elif st.session_state.paso_actual == 3:
-        st.balloons()
-        
+
         st.markdown("""
         <div style='background-color: #78808C; padding: 30px; border-radius: 15px; text-align: center;'>
             <h1>🎉 ¡Proceso Completado!</h1>
@@ -3190,9 +3385,162 @@ with tab2:
         st.rerun()
 
 # ================================================
-# TAB 3: Generador de Certificados
+# TAB 3: Generar Reporte PDF
 # ================================================
 with tab3:
+    st.markdown("### 📄 Generación de Reportes PDF por Grado y Sección")
+    st.info("""
+    📌 **Instrucciones:**
+    - Sube un archivo **HOMOLOGADO** con formato: `{NombreColegio}_1P-3P_RV.xlsx` o `{NombreColegio}_4P-5S_RV.xlsx`
+    - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
+    - Cada PDF contendrá la lista completa de estudiantes con sus notas
+    """)
+    
+    # Selector de tipo de archivo
+    tipo_reporte = st.radio(
+        "Selecciona el tipo de archivo homologado:",
+        ["1P-3P", "4P-5S"],
+        horizontal=True
+    )
+    
+    # Uploader de archivo
+    archivo_reporte = st.file_uploader(
+        f"Selecciona el archivo homologado {tipo_reporte}",
+        type=["xlsx"],
+        key="uploader_reporte"
+    )
+    
+    if archivo_reporte:
+        # Extraer nombre del colegio del nombre del archivo
+        nombre_archivo = archivo_reporte.name
+        
+        # Validar formato del nombre de archivo
+        patron_esperado = f"_{tipo_reporte}_RV.xlsx"
+        
+        if not nombre_archivo.endswith(patron_esperado):
+            st.error(f"❌ Formato de archivo incorrecto")
+            st.warning(f"⚠️ El archivo debe terminar en: `{patron_esperado}`")
+            st.info(f"📝 Ejemplo correcto: `Colegio{patron_esperado}`")
+            st.info(f"📝 Tu archivo: `{nombre_archivo}`")
+            st.stop()
+        
+        # Extraer nombre del colegio (quitar el sufijo)
+        nombre_colegio_reporte = nombre_archivo.replace(patron_esperado, "")
+        
+        # Validar que el nombre del colegio no esté vacío
+        if not nombre_colegio_reporte or nombre_colegio_reporte.strip() == "":
+            st.error("❌ No se pudo extraer el nombre del colegio del archivo")
+            st.info(f"Archivo recibido: `{nombre_archivo}`")
+            st.stop()
+        
+        # Mostrar nombre del colegio detectado
+        st.success(f"🏫 Colegio detectado: **{nombre_colegio_reporte}**")
+        
+        # Cargar y procesar archivo
+        with st.spinner("📊 Procesando archivo..."):
+            try:
+                # Leer archivo sin procesar
+                df_temp = pd.read_excel(archivo_reporte, header=None)
+                
+                # Detectar cabecera
+                fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_ARCHIVO2)
+                
+                if fila_cabecera is None:
+                    st.error("❌ No se pudo detectar la cabecera automáticamente")
+                    st.info("Columnas esperadas: Nro., Paterno, Materno, Nombres, Curso, Grado, Sección, Nota Vigesimal")
+                    st.stop()
+                
+                # Leer con cabecera detectada
+                df_reporte = pd.read_excel(archivo_reporte, header=fila_cabecera)
+                
+                # Normalizar nombres de columnas manteniendo formato correcto
+                columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
+                cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal"]
+                
+                # Mapear columnas
+                cols_a_usar = []
+                for col_req in cols_requeridas:
+                    col_norm = col_req.strip().lower()
+                    if col_norm in columnas_norm:
+                        cols_a_usar.append(columnas_norm[col_norm])
+                    else:
+                        st.error(f"❌ Columna no encontrada: '{col_req}'")
+                        st.info(f"Columnas disponibles: {list(df_reporte.columns)}")
+                        st.stop()
+                
+                # Seleccionar solo columnas necesarias
+                df_reporte = df_reporte[cols_a_usar]
+                
+                # Renombrar a formato estándar (MAYÚSCULAS)
+                df_reporte.columns = [
+                    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                    "GRADO", "SECCIÓN", "NOTA VIGESIMAL"
+                ]
+                
+                # Limpiar datos
+                df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
+                
+                if df_reporte.empty:
+                    st.error("❌ No hay datos válidos después de limpiar filas vacías")
+                    st.stop()
+                
+                # Homologar datos
+                df_reporte = homologar_dataframe(df_reporte)
+                
+                st.success(f"✅ Archivo cargado: {len(df_reporte)} registros")
+                st.success(f"📍 Cabecera detectada en fila {fila_cabecera + 1}")
+                
+                # Mostrar preview
+                st.markdown("#### Vista previa de datos")
+                st.dataframe(df_reporte, hide_index=True)
+                
+                # Agrupar datos
+                st.markdown("---")
+                st.markdown("### 📊 Agrupación de Datos")
+                
+                # Crear agrupaciones
+                grupos_reportes = df_reporte.groupby(['GRADO', 'SECCIÓN', 'CURSO'])
+                num_grupos = len(grupos_reportes)
+                
+                col_info1, col_info2, col_info3 = st.columns(3)
+                with col_info1:
+                    st.metric("Grados", df_reporte['GRADO'].nunique())
+                with col_info2:
+                    st.metric("Secciones", df_reporte['SECCIÓN'].nunique())
+                with col_info3:
+                    st.metric("Reportes a generar", num_grupos)
+                
+                # Mostrar detalle de grupos
+                with st.expander("📋 Ver detalle de grupos", expanded=True):
+                    grupos_info = []
+                    for (grado, seccion, curso), grupo_df in grupos_reportes:
+                        grupos_info.append({
+                            'Grado': grado,
+                            'Sección': seccion,
+                            'Curso': curso,
+                            'Estudiantes': len(grupo_df)
+                        })
+                    st.dataframe(pd.DataFrame(grupos_info), hide_index=True)
+                
+                # Botón para generar PDFs
+                st.markdown("---")
+                if st.button("🎯 GENERAR REPORTES PDF", type="primary", use_container_width=True):
+                    generar_reportes_pdf(
+                        df_reporte, 
+                        nombre_colegio_reporte, 
+                        tipo_reporte
+                    )
+                
+            except Exception as e:
+                st.error(f"❌ Error al procesar archivo: {str(e)}")
+                import traceback
+                with st.expander("🔍 Ver error detallado"):
+                    st.code(traceback.format_exc())
+
+# ================================================
+# TAB 4: Generador de Certificados
+# ================================================
+with tab4:
     st.markdown("## 🎓 Generador de Certificados PDF con Plantillas Automáticas")
 
     # Variable de estado para controlar el procesamineto del archivo
