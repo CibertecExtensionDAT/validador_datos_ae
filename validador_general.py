@@ -1236,7 +1236,7 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         fila_cabecera = 7
         
         # Estilo para la cabecera
-        header_fill = PatternFill(start_color="#002060", end_color="#002060", fill_type="solid")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True, size=10)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         
@@ -2631,324 +2631,311 @@ with tab1:
                             st.stop()
 
                     # ====================================
-                    # SECCIÓN DE DESCARGA
+                    # SECCIÓN DE DESCARGA - MODIFICACIÓN COMPLETA
                     # ====================================
-                    # Agregar columna Nro. una sola vez antes de generar descargas
-                    if st.session_state.archivo2_1p3p_df is not None:
-                        st.session_state.archivo2_1p3p_df = agregar_columna_nro(st.session_state.archivo2_1p3p_df)
-                    if st.session_state.archivo2_4p5s_df is not None:
-                        st.session_state.archivo2_4p5s_df = agregar_columna_nro(st.session_state.archivo2_4p5s_df)
 
-                    # Validación
-                    if df_1p3p_procesado is not None or df_4p5s_procesado is not None:
+                    # Validación de hojas procesadas
+                    hoja_1p3p_lista = df_1p3p_procesado is not None and st.session_state.archivo2_1p3p_df is not None
+                    hoja_4p5s_lista = df_4p5s_procesado is not None and st.session_state.archivo2_4p5s_df is not None
+
+                    if hoja_1p3p_lista or hoja_4p5s_lista:
                         st.divider()
                         st.markdown("### 💾 Archivos Listos para Descargar")
                         
-                        # Calcular número de botones de descarga
-                        num_descargas = 0
-                        if df_1p3p_procesado is not None:
-                            num_descargas += 1  # archivo homologado 1P-3P
-                        if df_4p5s_procesado is not None:
-                            num_descargas += 1  # archivo homologado 4P-5S
-                        # Siempre hay 1 archivo evaluador (puede tener 1 o 2 hojas)
-                        num_descargas += 1
-                        
-                        # Diseño dinámico
-                        cols_descarga = st.columns(min(num_descargas, 3))
-                        col_idx = 0
-                        
-                        # Descargas para 1P-3P (archivo homologado)
-                        if df_1p3p_procesado is not None:
-                            with cols_descarga[col_idx]:
-                                df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR", "NRO."], errors="ignore")
-                                df_sin_notas_1p3p["NOTA VIGESIMAL"] = df_sin_notas_1p3p["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
-                                buffer_1p3p = guardar_con_formato_original(
-                                    df_procesado=df_sin_notas_1p3p,
-                                    archivo_original_bytes=st.session_state.archivo2_bytes,
-                                    nombre_hoja="1P-3P",
-                                    fila_cabecera=st.session_state.archivo2_1p3p_fila_cabecera,
-                                    solo_hoja_especificada=True
-                                )
-                                st.download_button(
-                                    label="📥 1P-3P Homologado",
-                                    data=buffer_1p3p,
-                                    file_name=f"{st.session_state.nombre_colegio}_1P-3P_RV.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True
-                                )
-                            col_idx += 1
-                        
-                        # Descargas para 4P-5S (archivo homologado)
-                        if df_4p5s_procesado is not None:
-                            with cols_descarga[col_idx]:
-                                df_sin_notas_4p5s = df_4p5s_procesado.drop(columns=["IDENTIFICADOR", "NRO.", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
-                                df_sin_notas_4p5s["NOTA VIGESIMAL"] = df_sin_notas_4p5s["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
-                                buffer_4p5s = guardar_con_formato_original(
-                                    df_procesado=df_sin_notas_4p5s,
-                                    archivo_original_bytes=st.session_state.archivo2_bytes,
-                                    nombre_hoja="4P-5S",
-                                    fila_cabecera=st.session_state.archivo2_4p5s_fila_cabecera,
-                                    solo_hoja_especificada=True
-                                )
-                                st.download_button(
-                                    label="📥 4P-5S Homologado",
-                                    data=buffer_4p5s,
-                                    file_name=f"{st.session_state.nombre_colegio}_4P-5S_RV.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True
-                                )
-                            col_idx += 1
-                        
-                        # ARCHIVO EVALUADOR ÚNICO (con todas las hojas necesarias)
-                        # Combinar ambos DataFrames procesados para hacer UN SOLO merge
-                        df_merge_completo = pd.concat([
-                            df_1p3p_procesado if df_1p3p_procesado is not None else pd.DataFrame(),
-                            df_4p5s_procesado if df_4p5s_procesado is not None else pd.DataFrame()
-                        ], ignore_index=True)
+                        # ========== SECCIÓN 1P-3P ==========
+                        if hoja_1p3p_lista:
+                            st.markdown("#### 📘 Archivos 1P-3P")
                             
-                        # Crear evaluadores separados por grado
-                        df_eval_1p3p, df_eval_4p5s = crear_archivo_evaluador(
-                            st.session_state.archivo1_df,
-                            df_merge_completo
-                        )
+                            # Preparar DataFrames para 1P-3P
+                            df_eval_1p3p_completo, _ = crear_archivo_evaluador(
+                                st.session_state.archivo1_df,
+                                df_1p3p_procesado
+                            )
                             
-                        # Preparar diccionario de hojas para el archivo evaluador
-                        dict_hojas_evaluador = {}
-                            
-                        if len(df_eval_1p3p) > 0 and df_1p3p_procesado is not None:
-                            df_eval_1p3p_final = df_eval_1p3p.drop(columns=["IDENTIFICADOR"], errors="ignore")
-                            df_eval_1p3p_final["NOTA VIGESIMAL"] = df_eval_1p3p_final["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
-                            dict_hojas_evaluador["1P-3P"] = {
-                                'df': df_eval_1p3p_final,
-                                'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                            # Preparar archivos individuales
+                            dict_hojas_1p3p = {
+                                "1P-3P": {
+                                    'df': df_eval_1p3p_completo.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                    'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                }
                             }
                             
-                        if len(df_eval_4p5s) > 0 and df_4p5s_procesado is not None:
-                            df_eval_4p5s_final = df_eval_4p5s.drop(columns=["IDENTIFICADOR"], errors="ignore")
-                            df_eval_4p5s_final["NOTA VIGESIMAL"] = df_eval_4p5s_final["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
-                            dict_hojas_evaluador["4P-5S"] = {
-                                'df': df_eval_4p5s_final,
-                                'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
-                            }
+                            # Filtros para 1P-3P
+                            df_1p3p_actual = df_eval_1p3p_completo.copy()
                             
-                        # TRES BOTONES DE DESCARGA PARA ARCHIVOS EVALUADORES
-                        st.markdown("#### 📋 Archivos Evaluadores")
-                        col_eval1, col_eval2, col_eval3 = st.columns(3)
+                            df_1p3p_observados = df_eval_1p3p_completo[
+                                df_eval_1p3p_completo["OBSERVACIONES"].isin(["RET", "SN"])
+                            ].copy()
+                            if len(df_1p3p_observados) > 0:
+                                df_1p3p_observados = df_1p3p_observados.reset_index(drop=True)
+                                if 'NRO.' in df_1p3p_observados.columns:
+                                    df_1p3p_observados = df_1p3p_observados.drop(columns=['NRO.'])
+                                df_1p3p_observados.insert(0, 'NRO.', range(1, len(df_1p3p_observados) + 1))
                             
-                        # BOTÓN 1: ARCHIVO "ACTUAL" (todas las filas)
-                        with col_eval1:
-                            buffer_evaluador_actual = guardar_evaluador_con_multiples_hojas(
-                                archivo_original_bytes=st.session_state.archivo2_bytes,
-                                dict_hojas_procesadas=dict_hojas_evaluador
-                            )
-                                
-                            st.download_button(
-                                label="📥 ACTUAL",
-                                data=buffer_evaluador_actual,
-                                file_name=f"{st.session_state.nombre_colegio}_ACTUAL.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True,
-                                help="Descarga el archivo completo con todas las filas (vacíos, RET y SN)"
-                            )
+                            df_1p3p_ok = df_eval_1p3p_completo[
+                                (df_eval_1p3p_completo["OBSERVACIONES"].isna()) | 
+                                (df_eval_1p3p_completo["OBSERVACIONES"] == "") |
+                                (df_eval_1p3p_completo["OBSERVACIONES"].astype(str).str.strip() == "")
+                            ].copy()
+                            if len(df_1p3p_ok) > 0:
+                                df_1p3p_ok = df_1p3p_ok.reset_index(drop=True)
+                                if 'NRO.' in df_1p3p_ok.columns:
+                                    df_1p3p_ok = df_1p3p_ok.drop(columns=['NRO.'])
+                                df_1p3p_ok.insert(0, 'NRO.', range(1, len(df_1p3p_ok) + 1))
                             
-                        # BOTÓN 2: ARCHIVO "OBSERVADOS" (solo filas con RET o SN en OBSERVACIONES)
-                        with col_eval2:
-                            # Filtrar solo filas con RET o SN
-                            dict_hojas_ret_sn = {}
-                                
-                            if "1P-3P" in dict_hojas_evaluador:
-                                df_1p3p_ret_sn = dict_hojas_evaluador["1P-3P"]['df'].copy()
-                                # Filtrar solo filas donde OBSERVACIONES contenga RET o SN
-                                df_1p3p_ret_sn = df_1p3p_ret_sn[
-                                    df_1p3p_ret_sn["OBSERVACIONES"].isin(["RET", "SN"])
-                                ]
-                                if len(df_1p3p_ret_sn) > 0:
-                                    # Resetear índice y regenerar NRO.
-                                    df_1p3p_ret_sn = df_1p3p_ret_sn.reset_index(drop=True)
-                                    if 'NRO.' in df_1p3p_ret_sn.columns:
-                                        df_1p3p_ret_sn = df_1p3p_ret_sn.drop(columns=['NRO.'])
-                                    df_1p3p_ret_sn.insert(0, 'NRO.', range(1, len(df_1p3p_ret_sn) + 1))
-
-                                    dict_hojas_ret_sn["1P-3P"] = {
-                                        'df': df_1p3p_ret_sn,
-                                        'fila_cabecera': dict_hojas_evaluador["1P-3P"]['fila_cabecera']
+                            # Tres columnas para botones 1P-3P
+                            col_1p3p_1, col_1p3p_2, col_1p3p_3 = st.columns(3)
+                            
+                            with col_1p3p_1:
+                                # ACTUAL 1P-3P
+                                dict_actual_1p3p = {
+                                    "1P-3P": {
+                                        'df': df_1p3p_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                        'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
                                     }
-                                
-                            if "4P-5S" in dict_hojas_evaluador:
-                                df_4p5s_ret_sn = dict_hojas_evaluador["4P-5S"]['df'].copy()
-                                # Filtrar solo filas donde OBSERVACIONES contenga RET o SN
-                                df_4p5s_ret_sn = df_4p5s_ret_sn[
-                                    df_4p5s_ret_sn["OBSERVACIONES"].isin(["RET", "SN"])
-                                ]
-                                if len(df_4p5s_ret_sn) > 0:
-                                    # Resetear índice y regenerar NRO.
-                                    df_4p5s_ret_sn = df_4p5s_ret_sn.reset_index(drop=True)
-                                    if 'NRO.' in df_4p5s_ret_sn.columns:
-                                        df_4p5s_ret_sn = df_4p5s_ret_sn.drop(columns=['NRO.'])
-                                    df_4p5s_ret_sn.insert(0, 'NRO.', range(1, len(df_4p5s_ret_sn) + 1))
-
-                                    dict_hojas_ret_sn["4P-5S"] = {
-                                        'df': df_4p5s_ret_sn,
-                                        'fila_cabecera': dict_hojas_evaluador["4P-5S"]['fila_cabecera']
+                                }
+                                buffer_actual_1p3p = guardar_evaluador_con_multiples_hojas(
+                                    archivo_original_bytes=st.session_state.archivo2_bytes,
+                                    dict_hojas_procesadas=dict_actual_1p3p
+                                )
+                                st.download_button(
+                                    label="📥 ACTUAL (1P-3P)",
+                                    data=buffer_actual_1p3p,
+                                    file_name=f"{st.session_state.nombre_colegio}_1P3P_ACTUAL.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True,
+                                    help="Todas las filas de 1P-3P"
+                                )
+                            
+                            with col_1p3p_2:
+                                # OBSERVADOS 1P-3P
+                                if len(df_1p3p_observados) > 0:
+                                    dict_observados_1p3p = {
+                                        "1P-3P": {
+                                            'df': df_1p3p_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                        }
                                     }
-                                
-                            buffer_evaluador_ret_sn = guardar_evaluador_con_multiples_hojas(
-                                archivo_original_bytes=st.session_state.archivo2_bytes,
-                                dict_hojas_procesadas=dict_hojas_ret_sn
-                            )
-                                
-                            st.download_button(
-                                label="📥 OBSERVADOS",
-                                data=buffer_evaluador_ret_sn,
-                                file_name=f"{st.session_state.nombre_colegio}_OBSERVADOS.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True,
-                                help="Descarga solo las filas con RET o SN en OBSERVACIONES"
-                            )
+                                    buffer_observados_1p3p = guardar_evaluador_con_multiples_hojas(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_observados_1p3p
+                                    )
+                                    st.download_button(
+                                        label="📥 OBSERVADOS (1P-3P)",
+                                        data=buffer_observados_1p3p,
+                                        file_name=f"{st.session_state.nombre_colegio}_1P3P_OBSERVADOS.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True,
+                                        help="Solo filas con RET o SN"
+                                    )
+                                else:
+                                    st.info("Sin observados en 1P-3P")
                             
-                        # BOTÓN 3: ARCHIVO "OK" (solo filas con OBSERVACIONES + transformación para 4P-5S)
-                        with col_eval3:
-                            dict_hojas_ok = {}
-                            
-                            # Columnas requeridas para el formato certificado (solo para 4P-5S)
-                            columnas_certificado = [
-                                'Nro', 'Paterno', 'Materno', 'Nombre', 'Grado', 'Sección', 'Curso', 
-                                'Nota Laboratorio', 'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
-                                'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.', 'Nota Evaluador', 
-                                'Nota Final', 'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
-                            ]
-                            
-                            # ========== PROCESAR 1P-3P (sin transformación, solo filtro) ==========
-                            if "1P-3P" in dict_hojas_evaluador:
-                                df_1p3p_ok = dict_hojas_evaluador["1P-3P"]['df'].copy()
-                                
-                                # Filtrar solo filas con OBSERVACIONES vacío
-                                df_1p3p_ok = df_1p3p_ok[
-                                    (df_1p3p_ok["OBSERVACIONES"].isna()) | 
-                                    (df_1p3p_ok["OBSERVACIONES"] == "") |
-                                    (df_1p3p_ok["OBSERVACIONES"].astype(str).str.strip() == "")
-                                ]
-                                
+                            with col_1p3p_3:
+                                # OK 1P-3P
                                 if len(df_1p3p_ok) > 0:
-                                    # Resetear índice y regenerar NRO.
-                                    df_1p3p_ok = df_1p3p_ok.reset_index(drop=True)
-                                    if 'NRO.' in df_1p3p_ok.columns:
-                                        df_1p3p_ok = df_1p3p_ok.drop(columns=['NRO.'])
-                                    df_1p3p_ok.insert(0, 'NRO.', range(1, len(df_1p3p_ok) + 1))
-
-                                    dict_hojas_ok["1P-3P"] = {
-                                        'df': df_1p3p_ok,
-                                        'fila_cabecera': dict_hojas_evaluador["1P-3P"]['fila_cabecera']
+                                    dict_ok_1p3p = {
+                                        "1P-3P": {
+                                            'df': df_1p3p_ok.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                        }
                                     }
+                                    buffer_ok_1p3p = guardar_certificado_con_encabezado(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_ok_1p3p
+                                    )
+                                    st.download_button(
+                                        label="📥 OK (1P-3P)",
+                                        data=buffer_ok_1p3p,
+                                        file_name=f"{st.session_state.nombre_colegio}_1P3P_OK.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True,
+                                        help="Solo aprobados"
+                                    )
+                                else:
+                                    st.info("Sin aprobados en 1P-3P")
                             
-                            # ========== PROCESAR 4P-5S (con transformación completa) ==========
-                            if "4P-5S" in dict_hojas_evaluador:
-                                df_4p5s_ok = dict_hojas_evaluador["4P-5S"]['df'].copy()
+                            st.divider()
+                        
+                        # ========== SECCIÓN 4P-5S ==========
+                        if hoja_4p5s_lista:
+                            st.markdown("#### 📗 Archivos 4P-5S")
+                            
+                            # Preparar DataFrames para 4P-5S
+                            _, df_eval_4p5s_completo = crear_archivo_evaluador(
+                                st.session_state.archivo1_df,
+                                df_4p5s_procesado
+                            )
+                            
+                            # Filtros para 4P-5S
+                            df_4p5s_actual = df_eval_4p5s_completo.copy()
+                            
+                            df_4p5s_observados = df_eval_4p5s_completo[
+                                df_eval_4p5s_completo["OBSERVACIONES"].isin(["RET", "SN"])
+                            ].copy()
+                            if len(df_4p5s_observados) > 0:
+                                df_4p5s_observados = df_4p5s_observados.reset_index(drop=True)
+                                if 'NRO.' in df_4p5s_observados.columns:
+                                    df_4p5s_observados = df_4p5s_observados.drop(columns=['NRO.'])
+                                df_4p5s_observados.insert(0, 'NRO.', range(1, len(df_4p5s_observados) + 1))
+                            
+                            df_4p5s_ok = df_eval_4p5s_completo[
+                                (df_eval_4p5s_completo["OBSERVACIONES"].isna()) | 
+                                (df_eval_4p5s_completo["OBSERVACIONES"] == "") |
+                                (df_eval_4p5s_completo["OBSERVACIONES"].astype(str).str.strip() == "")
+                            ].copy()
+                            
+                            if len(df_4p5s_ok) > 0:
+                                # Resetear índice y regenerar NRO.
+                                df_4p5s_ok = df_4p5s_ok.reset_index(drop=True)
                                 
-                                # 1. Filtrar solo filas con OBSERVACIONES vacío
-                                df_4p5s_ok = df_4p5s_ok[
-                                    (df_4p5s_ok["OBSERVACIONES"].isna()) | 
-                                    (df_4p5s_ok["OBSERVACIONES"] == "") |
-                                    (df_4p5s_ok["OBSERVACIONES"].astype(str).str.strip() == "")
+                                # Normalizar nombres de columnas
+                                df_4p5s_ok.columns = df_4p5s_ok.columns.str.strip()
+                                
+                                # Mapear columnas a formato certificado
+                                mapeo_columnas = {}
+                                for col in df_4p5s_ok.columns:
+                                    col_upper = col.upper().strip()
+                                    
+                                    if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
+                                        mapeo_columnas[col] = 'Nro'
+                                    elif col_upper == 'PATERNO':
+                                        mapeo_columnas[col] = 'Paterno'
+                                    elif col_upper == 'MATERNO':
+                                        mapeo_columnas[col] = 'Materno'
+                                    elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
+                                        mapeo_columnas[col] = 'Nombre'
+                                    elif col_upper == 'CURSO':
+                                        mapeo_columnas[col] = 'Curso'
+                                    elif col_upper == 'GRADO':
+                                        mapeo_columnas[col] = 'Grado'
+                                    elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
+                                        mapeo_columnas[col] = 'Sección'
+                                    elif col_upper == 'NOTA VIGESIMAL':
+                                        mapeo_columnas[col] = 'Nota Laboratorio'
+                                
+                                df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
+                                
+                                # Eliminar columnas no necesarias
+                                columnas_a_eliminar = []
+                                for col in df_4p5s_ok.columns:
+                                    col_upper = col.upper()
+                                    if 'PROMEDIO' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                    elif 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                        columnas_a_eliminar.append(col)
+                                
+                                df_4p5s_ok = df_4p5s_ok.drop(columns=columnas_a_eliminar, errors='ignore')
+                                
+                                # Agregar columnas nuevas para certificado
+                                nuevas_columnas = [
+                                    'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
+                                    'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.',
+                                    'Nota Evaluador', 'Nota Final', 
+                                    'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
                                 ]
+                                for col in nuevas_columnas:
+                                    if col not in df_4p5s_ok.columns:
+                                        df_4p5s_ok[col] = ''
                                 
-                                if len(df_4p5s_ok) > 0:
-                                    # 1.5. Resetear índice
-                                    df_4p5s_ok = df_4p5s_ok.reset_index(drop=True)
-
-                                    # 2. Normalizar nombres de columnas
-                                    df_4p5s_ok.columns = df_4p5s_ok.columns.str.strip()
-                                    
-                                    # 3. Mapear columnas originales a nuevas
-                                    mapeo_columnas = {}
-                                    for col in df_4p5s_ok.columns:
-                                        col_upper = col.upper().strip()
-                                        
-                                        if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
-                                            mapeo_columnas[col] = 'Nro'
-                                        elif col_upper == 'PATERNO':
-                                            mapeo_columnas[col] = 'Paterno'
-                                        elif col_upper == 'MATERNO':
-                                            mapeo_columnas[col] = 'Materno'
-                                        elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
-                                            mapeo_columnas[col] = 'Nombre'
-                                        elif col_upper == 'CURSO':
-                                            mapeo_columnas[col] = 'Curso'
-                                        elif col_upper == 'GRADO':
-                                            mapeo_columnas[col] = 'Grado'
-                                        elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
-                                            mapeo_columnas[col] = 'Sección'
-                                        elif col_upper == 'NOTA VIGESIMAL':
-                                            mapeo_columnas[col] = 'Nota Laboratorio'
-                                        #elif 'NOTAS VIGESIMALES 75%' in col_upper or ('NOTAS' in col_upper and 'VIGESIMAL' in col_upper and '75' in col_upper):
-                                        #    mapeo_columnas[col] = 'Nota Laboratorio'
-                                    
-                                    df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
-                                    
-                                    # 4. Eliminar columnas no necesarias
-                                    columnas_a_eliminar = []
-                                    for col in df_4p5s_ok.columns:
-                                        col_upper = col.upper()
-                                        #if 'NOTA VIGESIMAL' in col_upper and 'nota de examen cibertec' not in col:
-                                        #    columnas_a_eliminar.append(col)
-                                        if 'PROMEDIO' in col_upper:
-                                            columnas_a_eliminar.append(col)
-                                        elif 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
-                                            columnas_a_eliminar.append(col)
-                                    
-                                    df_4p5s_ok = df_4p5s_ok.drop(columns=columnas_a_eliminar, errors='ignore')
-                                    
-                                    # 5. Agregar nuevas columnas vacías
-                                    nuevas_columnas = [
-                                        'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
-                                        'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.',
-                                        'Nota Evaluador', 'Nota Final', 
-                                        'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
-                                    ]
-                                    for col in nuevas_columnas:
-                                        if col not in df_4p5s_ok.columns:
-                                            df_4p5s_ok[col] = ''
-                                    
-                                    # 6. Reordenar solo las columnas que existen
-                                    columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
-                                    df_4p5s_ok = df_4p5s_ok[columnas_existentes]
-
-                                    # 6.5. Regenerar NRO. secuencial
-                                    if 'Nro' in df_4p5s_ok.columns:
-                                        df_4p5s_ok['Nro'] = range(1, len(df_4p5s_ok) + 1)
-                                    
-                                    # 7. Guardar hoja procesada
-                                    dict_hojas_ok["4P-5S"] = {
-                                        'df': df_4p5s_ok,
-                                        'fila_cabecera': dict_hojas_evaluador["4P-5S"]['fila_cabecera']
+                                # Reordenar columnas
+                                columnas_certificado = [
+                                    'Nro', 'Paterno', 'Materno', 'Nombre', 'Grado', 'Sección', 'Curso', 
+                                    'Nota Laboratorio', 'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
+                                    'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.', 'Nota Evaluador', 
+                                    'Nota Final', 'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
+                                ]
+                                columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
+                                df_4p5s_ok = df_4p5s_ok[columnas_existentes]
+                                
+                                # Regenerar Nro secuencial
+                                if 'Nro' in df_4p5s_ok.columns:
+                                    df_4p5s_ok['Nro'] = range(1, len(df_4p5s_ok) + 1)
+                            
+                            # Tres columnas para botones 4P-5S
+                            col_4p5s_1, col_4p5s_2, col_4p5s_3 = st.columns(3)
+                            
+                            with col_4p5s_1:
+                                # ACTUAL 4P-5S
+                                dict_actual_4p5s = {
+                                    "4P-5S": {
+                                        'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                        'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                     }
+                                }
+                                buffer_actual_4p5s = guardar_evaluador_con_multiples_hojas(
+                                    archivo_original_bytes=st.session_state.archivo2_bytes,
+                                    dict_hojas_procesadas=dict_actual_4p5s
+                                )
+                                st.download_button(
+                                    label="📥 ACTUAL (4P-5S)",
+                                    data=buffer_actual_4p5s,
+                                    file_name=f"{st.session_state.nombre_colegio}_4P5S_ACTUAL.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True,
+                                    help="Todas las filas de 4P-5S"
+                                )
                             
-                            # ========== GENERAR ARCHIVO ÚNICO CON FORMATO ESPECIAL ==========
-                            buffer_evaluador_ok = guardar_certificado_con_encabezado(
-                                archivo_original_bytes=st.session_state.archivo2_bytes,
-                                dict_hojas_procesadas=dict_hojas_ok
-                            )
+                            with col_4p5s_2:
+                                # OBSERVADOS 4P-5S
+                                if len(df_4p5s_observados) > 0:
+                                    dict_observados_4p5s = {
+                                        "4P-5S": {
+                                            'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
+                                        }
+                                    }
+                                    buffer_observados_4p5s = guardar_evaluador_con_multiples_hojas(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_observados_4p5s
+                                    )
+                                    st.download_button(
+                                        label="📥 OBSERVADOS (4P-5S)",
+                                        data=buffer_observados_4p5s,
+                                        file_name=f"{st.session_state.nombre_colegio}_4P5S_OBSERVADOS.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True,
+                                        help="Solo filas con RET o SN"
+                                    )
+                                else:
+                                    st.info("Sin observados en 4P-5S")
                             
-                            st.download_button(
-                                label="📥 OK",
-                                data=buffer_evaluador_ok,
-                                file_name=f"{st.session_state.nombre_colegio}_OK.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True,
-                                help="Archivo con filas aprobadas. 4P-5S incluye formato certificado automáticamente"
-                            )
-
+                            with col_4p5s_3:
+                                # OK 4P-5S
+                                if len(df_4p5s_ok) > 0:
+                                    dict_ok_4p5s = {
+                                        "4P-5S": {
+                                            'df': df_4p5s_ok,
+                                            'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
+                                        }
+                                    }
+                                    buffer_ok_4p5s = guardar_certificado_con_encabezado(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_ok_4p5s
+                                    )
+                                    st.download_button(
+                                        label="📥 OK (4P-5S)",
+                                        data=buffer_ok_4p5s,
+                                        file_name=f"{st.session_state.nombre_colegio}_4P5S_OK.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True,
+                                        help="Solo aprobados con formato certificado"
+                                    )
+                                else:
+                                    st.info("Sin aprobados en 4P-5S")
+                            
+                            st.divider()
+                        
                         # Botón de finalización
-                        st.divider()
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
                             if st.button("✅ Finalizar Proceso", type="primary", use_container_width=True):
                                 st.session_state.paso_actual = 3
                                 st.rerun()
-                    
+
                     else:
-                        st.warning("⚠️ Detección manual necesaria")
-                
+                        st.warning("⚠️ Completa el procesamiento de al menos una hoja para descargar archivos")
+                    
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
