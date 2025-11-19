@@ -1031,7 +1031,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 
                 # Footer con estadísticas
                 total_alumnos = len(grupo_df_sorted)
-                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL'], errors='coerce') >= 13])
+                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
                 
                 story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
