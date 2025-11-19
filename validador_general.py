@@ -801,7 +801,7 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
     output.seek(0)
     return output
 
-def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_procesadas):
+def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_procesadas, solo_hojas_especificadas=False):
     """
     Guarda un archivo Excel con múltiples hojas preservando el formato original.
     
@@ -813,11 +813,20 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
                 'fila_cabecera': int (índice de cabecera en base 0)
             }
         }
+        solo_hojas_especificadas: Si True, solo incluye las hojas en dict_hojas_procesadas
+                                   Si False, mantiene todas las hojas del archivo original
     
     Returns:
         BytesIO con el archivo actualizado preservando formato
     """
     wb = load_workbook(BytesIO(archivo_original_bytes))
+    
+    # Si solo_hojas_especificadas=True, eliminar todas las hojas que NO estén en dict_hojas_procesadas
+    if solo_hojas_especificadas:
+        hojas_a_mantener = list(dict_hojas_procesadas.keys())
+        hojas_a_eliminar = [sheet for sheet in wb.sheetnames if sheet not in hojas_a_mantener]
+        for hoja in hojas_a_eliminar:
+            wb.remove(wb[hoja])
     
     for nombre_hoja, datos in dict_hojas_procesadas.items():
         df_procesado = datos['df']
@@ -1236,7 +1245,7 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         fila_cabecera = 7
         
         # Estilo para la cabecera
-        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True, size=10)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         
@@ -2696,7 +2705,8 @@ with tab1:
                                 }
                                 buffer_actual_1p3p = guardar_evaluador_con_multiples_hojas(
                                     archivo_original_bytes=st.session_state.archivo2_bytes,
-                                    dict_hojas_procesadas=dict_actual_1p3p
+                                    dict_hojas_procesadas=dict_actual_1p3p,
+                                    solo_hojas_especificadas=True
                                 )
                                 st.download_button(
                                     label="📥 ACTUAL (1P-3P)",
@@ -2718,7 +2728,8 @@ with tab1:
                                     }
                                     buffer_observados_1p3p = guardar_evaluador_con_multiples_hojas(
                                         archivo_original_bytes=st.session_state.archivo2_bytes,
-                                        dict_hojas_procesadas=dict_observados_1p3p
+                                        dict_hojas_procesadas=dict_observados_1p3p,
+                                        solo_hojas_especificadas=True
                                     )
                                     st.download_button(
                                         label="📥 OBSERVADOS (1P-3P)",
@@ -2865,7 +2876,8 @@ with tab1:
                                 }
                                 buffer_actual_4p5s = guardar_evaluador_con_multiples_hojas(
                                     archivo_original_bytes=st.session_state.archivo2_bytes,
-                                    dict_hojas_procesadas=dict_actual_4p5s
+                                    dict_hojas_procesadas=dict_actual_4p5s,
+                                    solo_hojas_especificadas=True
                                 )
                                 st.download_button(
                                     label="📥 ACTUAL (4P-5S)",
@@ -2887,7 +2899,8 @@ with tab1:
                                     }
                                     buffer_observados_4p5s = guardar_evaluador_con_multiples_hojas(
                                         archivo_original_bytes=st.session_state.archivo2_bytes,
-                                        dict_hojas_procesadas=dict_observados_4p5s
+                                        dict_hojas_procesadas=dict_observados_4p5s,
+                                        solo_hojas_especificadas=True
                                     )
                                     st.download_button(
                                         label="📥 OBSERVADOS (4P-5S)",
