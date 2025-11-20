@@ -555,7 +555,7 @@ def validar_correo(df, col_correo="CORREO INSTITUCIONAL"):
         
         # Validación básica: contiene @ y .
         if "@" not in correo or "." not in correo.split("@")[-1]:
-            errores.append(f"Fila {idx + 2}: Correo inválido '{correo}' - {identificador}")
+            errores.append(f"Fila {idx + 2}: Correo inválido '{correo}' - {identificador}, no contiene @ ni .")
     
     return errores
 
@@ -2886,7 +2886,7 @@ with tab1:
                                 st.download_button(
                                     label="📥 ACTUAL (1P-3P)",
                                     data=buffer_actual_1p3p,
-                                    file_name=f"{st.session_state.nombre_colegio}_1P3P_ACTUAL.xlsx",
+                                    file_name=f"{st.session_state.nombre_colegio}_1P-3P_ACTUAL.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                     use_container_width=True,
                                     help="Todas las filas de 1P-3P"
@@ -2909,7 +2909,7 @@ with tab1:
                                     st.download_button(
                                         label="📥 OBSERVADOS (1P-3P)",
                                         data=buffer_observados_1p3p,
-                                        file_name=f"{st.session_state.nombre_colegio}_1P3P_OBSERVADOS.xlsx",
+                                        file_name=f"{st.session_state.nombre_colegio}_1P-3P_OBSERVADOS.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True,
                                         help="Solo filas con RET o SN"
@@ -2933,7 +2933,7 @@ with tab1:
                                     st.download_button(
                                         label="📥 OK (1P-3P)",
                                         data=buffer_ok_1p3p,
-                                        file_name=f"{st.session_state.nombre_colegio}_1P3P_OK.xlsx",
+                                        file_name=f"{st.session_state.nombre_colegio}_1P-3P_OK.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True,
                                         help="Solo aprobados"
@@ -3076,7 +3076,7 @@ with tab1:
                                 st.download_button(
                                     label="📥 ACTUAL (4P-5S)",
                                     data=buffer_actual_4p5s,
-                                    file_name=f"{st.session_state.nombre_colegio}_4P5S_ACTUAL.xlsx",
+                                    file_name=f"{st.session_state.nombre_colegio}_4P-5S_ACTUAL.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                     use_container_width=True,
                                     help="Todas las filas de 4P-5S"
@@ -3099,7 +3099,7 @@ with tab1:
                                     st.download_button(
                                         label="📥 OBSERVADOS (4P-5S)",
                                         data=buffer_observados_4p5s,
-                                        file_name=f"{st.session_state.nombre_colegio}_4P5S_OBSERVADOS.xlsx",
+                                        file_name=f"{st.session_state.nombre_colegio}_4P-5S_OBSERVADOS.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True,
                                         help="Solo filas con RET o SN"
@@ -3123,7 +3123,7 @@ with tab1:
                                     st.download_button(
                                         label="📥 OK (4P-5S)",
                                         data=buffer_ok_4p5s,
-                                        file_name=f"{st.session_state.nombre_colegio}_4P5S_OK.xlsx",
+                                        file_name=f"{st.session_state.nombre_colegio}_4P-5S_OK.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True,
                                         help="Solo aprobados con formato certificado"
