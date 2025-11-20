@@ -3235,6 +3235,180 @@ with tab1:
                             
                             st.divider()
                         
+                        # ========== SECCIÓN DE DESCARGA COMPLETA ==========
+                        st.markdown("#### 📦 Descarga Completa")
+                        st.caption("Descarga todos los archivos procesados en un solo ZIP")
+                        
+                        col_zip1, col_zip2 = st.columns(2)
+                        
+                        with col_zip1:
+                            # ZIP de 1P-3P
+                            if hoja_1p3p_lista:
+                                from io import BytesIO
+                                from zipfile import ZipFile
+                                
+                                zip_1p3p_buffer = BytesIO()
+                                with ZipFile(zip_1p3p_buffer, 'w') as zip_file:
+                                    # 1. Homologado
+                                    df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR"], errors="ignore")
+                                    df_sin_notas_1p3p["NOTA VIGESIMAL 25%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
+                                    buffer_homologado_1p3p = guardar_con_formato_original(
+                                        df_procesado=df_sin_notas_1p3p,
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        nombre_hoja="1P-3P",
+                                        fila_cabecera=st.session_state.archivo2_1p3p_fila_cabecera,
+                                        solo_hoja_especificada=True
+                                    )
+                                    zip_file.writestr(f"{st.session_state.nombre_colegio}_1P-3P_RV.xlsx", buffer_homologado_1p3p.getvalue())
+                                    
+                                    # 2. ACTUAL
+                                    dict_actual_1p3p = {
+                                        "1P-3P": {
+                                            'df': df_1p3p_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                        }
+                                    }
+                                    buffer_actual_1p3p = guardar_evaluador_con_multiples_hojas(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_actual_1p3p,
+                                        solo_hojas_especificadas=True
+                                    )
+                                    zip_file.writestr(f"{st.session_state.nombre_colegio}_1P-3P_ACTUAL.xlsx", buffer_actual_1p3p.getvalue())
+                                    
+                                    # 3. OBSERVADOS (si existen)
+                                    if len(df_1p3p_observados) > 0:
+                                        dict_observados_1p3p = {
+                                            "1P-3P": {
+                                                'df': df_1p3p_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                                'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                            }
+                                        }
+                                        buffer_observados_1p3p = guardar_evaluador_con_multiples_hojas(
+                                            archivo_original_bytes=st.session_state.archivo2_bytes,
+                                            dict_hojas_procesadas=dict_observados_1p3p,
+                                            solo_hojas_especificadas=True
+                                        )
+                                        zip_file.writestr(f"{st.session_state.nombre_colegio}_1P-3P_OBSERVADOS.xlsx", buffer_observados_1p3p.getvalue())
+                                    
+                                    # 4. OK (si existen)
+                                    if len(df_1p3p_ok) > 0:
+                                        dict_ok_1p3p = {
+                                            "1P-3P": {
+                                                'df': df_1p3p_ok.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                                'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
+                                            }
+                                        }
+                                        buffer_ok_1p3p = guardar_certificado_con_encabezado(
+                                            archivo_original_bytes=st.session_state.archivo2_bytes,
+                                            dict_hojas_procesadas=dict_ok_1p3p
+                                        )
+                                        zip_file.writestr(f"{st.session_state.nombre_colegio}_1P-3P_OK.xlsx", buffer_ok_1p3p.getvalue())
+                                
+                                zip_1p3p_buffer.seek(0)
+                                
+                                # Contar archivos incluidos
+                                archivos_1p3p = 2  # Homologado + ACTUAL
+                                if len(df_1p3p_observados) > 0:
+                                    archivos_1p3p += 1
+                                if len(df_1p3p_ok) > 0:
+                                    archivos_1p3p += 1
+                                
+                                st.download_button(
+                                    label=f"📦 Descargar Todo 1P-3P ({archivos_1p3p} archivos)",
+                                    data=zip_1p3p_buffer,
+                                    file_name=f"{st.session_state.nombre_colegio}_1P-3P_COMPLETO.zip",
+                                    mime="application/zip",
+                                    use_container_width=True,
+                                    help=f"Descarga {archivos_1p3p} archivos Excel en un ZIP"
+                                )
+                            else:
+                                st.info("1P-3P no procesado")
+                        
+                        with col_zip2:
+                            # ZIP de 4P-5S
+                            if hoja_4p5s_lista:
+                                from io import BytesIO
+                                from zipfile import ZipFile
+                                
+                                zip_4p5s_buffer = BytesIO()
+                                with ZipFile(zip_4p5s_buffer, 'w') as zip_file:
+                                    # 1. Homologado
+                                    df_sin_notas_4p5s = df_4p5s_procesado.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
+                                    df_sin_notas_4p5s["NOTA VIGESIMAL 25%"] = df_sin_notas_4p5s["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
+                                    buffer_homologado_4p5s = guardar_con_formato_original(
+                                        df_procesado=df_sin_notas_4p5s,
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        nombre_hoja="4P-5S",
+                                        fila_cabecera=st.session_state.archivo2_4p5s_fila_cabecera,
+                                        solo_hoja_especificada=True
+                                    )
+                                    zip_file.writestr(f"{st.session_state.nombre_colegio}_4P-5S_RV.xlsx", buffer_homologado_4p5s.getvalue())
+                                    
+                                    # 2. ACTUAL
+                                    dict_actual_4p5s = {
+                                        "4P-5S": {
+                                            'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
+                                        }
+                                    }
+                                    buffer_actual_4p5s = guardar_evaluador_con_multiples_hojas(
+                                        archivo_original_bytes=st.session_state.archivo2_bytes,
+                                        dict_hojas_procesadas=dict_actual_4p5s,
+                                        solo_hojas_especificadas=True
+                                    )
+                                    zip_file.writestr(f"{st.session_state.nombre_colegio}_4P-5S_ACTUAL.xlsx", buffer_actual_4p5s.getvalue())
+                                    
+                                    # 3. OBSERVADOS (si existen)
+                                    if len(df_4p5s_observados) > 0:
+                                        dict_observados_4p5s = {
+                                            "4P-5S": {
+                                                'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                                'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
+                                            }
+                                        }
+                                        buffer_observados_4p5s = guardar_evaluador_con_multiples_hojas(
+                                            archivo_original_bytes=st.session_state.archivo2_bytes,
+                                            dict_hojas_procesadas=dict_observados_4p5s,
+                                            solo_hojas_especificadas=True
+                                        )
+                                        zip_file.writestr(f"{st.session_state.nombre_colegio}_4P-5S_OBSERVADOS.xlsx", buffer_observados_4p5s.getvalue())
+                                    
+                                    # 4. OK (si existen)
+                                    if len(df_4p5s_ok) > 0:
+                                        dict_ok_4p5s = {
+                                            "4P-5S": {
+                                                'df': df_4p5s_ok,
+                                                'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
+                                            }
+                                        }
+                                        buffer_ok_4p5s = guardar_certificado_con_encabezado(
+                                            archivo_original_bytes=st.session_state.archivo2_bytes,
+                                            dict_hojas_procesadas=dict_ok_4p5s
+                                        )
+                                        zip_file.writestr(f"{st.session_state.nombre_colegio}_4P-5S_OK.xlsx", buffer_ok_4p5s.getvalue())
+                                
+                                zip_4p5s_buffer.seek(0)
+                                
+                                # Contar archivos incluidos
+                                archivos_4p5s = 2  # Homologado + ACTUAL
+                                if len(df_4p5s_observados) > 0:
+                                    archivos_4p5s += 1
+                                if len(df_4p5s_ok) > 0:
+                                    archivos_4p5s += 1
+                                
+                                st.download_button(
+                                    label=f"📦 Descargar Todo 4P-5S ({archivos_4p5s} archivos)",
+                                    data=zip_4p5s_buffer,
+                                    file_name=f"{st.session_state.nombre_colegio}_4P-5S_COMPLETO.zip",
+                                    mime="application/zip",
+                                    use_container_width=True,
+                                    help=f"Descarga {archivos_4p5s} archivos Excel en un ZIP"
+                                )
+                            else:
+                                st.info("4P-5S no procesado")
+                        
+                        st.divider()
+
                         # Botón de finalización
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
