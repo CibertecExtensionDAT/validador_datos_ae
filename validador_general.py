@@ -1418,8 +1418,8 @@ def agregar_columna_nro(df):
 # Funciones para cabecera de certificados
 def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_procesadas):
     """
-    Guarda archivo de certificado preservando las primeras 6 filas del formato institucional
-    y agregando nuestra cabecera personalizada en la fila 7.
+    Guarda archivo de certificado preservando las primeras 7 filas del formato institucional
+    y agregando nuestra cabecera personalizada en la fila 8.
     
     Args:
         archivo_original_bytes: Bytes del archivo Excel original
@@ -1429,7 +1429,7 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         BytesIO con el archivo de certificado
     """
     
-    # Cargar el workbook original para copiar el formato de las primeras 6 filas
+    # Cargar el workbook original para copiar el formato de las primeras 7 filas
     wb_original = load_workbook(BytesIO(archivo_original_bytes))
     
     # Crear un nuevo workbook para el certificado
@@ -1442,12 +1442,12 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         # Crear nueva hoja
         ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
         
-        # Si la hoja existe en el original, copiar las primeras 6 filas
+        # Si la hoja existe en el original, copiar las primeras 7 filas
         if nombre_hoja in wb_original.sheetnames:
             ws_original = wb_original[nombre_hoja]
             
-            # Copiar las primeras 6 filas con su formato
-            for fila_idx in range(1, 7):
+            # Copiar las primeras 7 filas con su formato
+            for fila_idx in range(1, 8):
                 for col_idx in range(1, ws_original.max_column + 1):
                     celda_original = ws_original.cell(row=fila_idx, column=col_idx)
                     celda_nueva = ws_nueva.cell(row=fila_idx, column=col_idx)
@@ -1491,16 +1491,16 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
                     except:
                         pass
             
-            # Copiar merges de las primeras 6 filas
+            # Copiar merges de las primeras 7 filas
             try:
                 for merged_range in ws_original.merged_cells.ranges:
-                    if merged_range.min_row <= 6:
+                    if merged_range.min_row <= 7:
                         ws_nueva.merge_cells(str(merged_range))
             except:
                 pass
         
-        # Agregar cabecera personalizada en fila 7
-        fila_cabecera = 7
+        # Agregar cabecera personalizada en fila 8
+        fila_cabecera = 8
         
         # Estilo para la cabecera
         header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
@@ -1514,8 +1514,8 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             celda.font = header_font
             celda.alignment = header_alignment
         
-        # Agregar datos a partir de la fila 8
-        fila_inicio_datos = 8
+        # Agregar datos a partir de la fila 9
+        fila_inicio_datos = 9
         for row_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
             for col_idx, value in enumerate(row, start=1):
                 celda = ws_nueva.cell(row=row_idx, column=col_idx)
@@ -3094,13 +3094,13 @@ with tab1:
                                     elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
                                         mapeo_columnas[col] = 'Nombre'
                                     elif col_upper == 'CURSO':
-                                        mapeo_columnas[col] = 'Curso'
+                                        mapeo_columnas[col] = 'CURSO'
                                     elif col_upper == 'GRADO':
                                         mapeo_columnas[col] = 'Grado'
                                     elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
                                         mapeo_columnas[col] = 'Sección'
                                     elif col_upper == 'NOTA VIGESIMAL 25%':
-                                        mapeo_columnas[col] = 'Nota Laboratorio'
+                                        mapeo_columnas[col] = 'Nota Lab'
                                 
                                 df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
                                 
@@ -3117,10 +3117,10 @@ with tab1:
                                 
                                 # Agregar columnas nuevas para certificado
                                 nuevas_columnas = [
-                                    'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
-                                    'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.',
-                                    'Nota Evaluador', 'Nota Final', 
-                                    'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
+                                    'LISTA DE ASISTENCIA', 'P1 4 PUNTOS', 
+                                    'P2 4 PUNTOS', 'P3 4 PUNTOS', 'P4 4 PUNTOS', 'P5 4 PUNTOS',
+                                    'NOTA de Examen Cibertec', 'NOTA FINAL', 
+                                    'OBSERVACIÓN SOBRE NOTA DESAPROBATORIA', 'STATUS', 'Numeración'
                                 ]
                                 for col in nuevas_columnas:
                                     if col not in df_4p5s_ok.columns:
@@ -3128,10 +3128,10 @@ with tab1:
                                 
                                 # Reordenar columnas
                                 columnas_certificado = [
-                                    'Nro', 'Paterno', 'Materno', 'Nombre', 'Grado', 'Sección', 'Curso', 
-                                    'Nota Laboratorio', 'Observaciones APP', '¿Asistio?', 'P1 4Ptos.', 
-                                    'P2 4Ptos.', 'P3 4Ptos.', 'P4 4Ptos.', 'P5 4Ptos.', 'Nota Evaluador', 
-                                    'Nota Final', 'Observaciones de nota desaprobatoria', 'Estatus', 'Numeración'
+                                    'Nro', 'Paterno', 'Materno', 'Nombre', 'Grado', 'Sección', 'CURSO', 
+                                    'Nota Lab', 'LISTA DE ASISTENCIA', 'P1 4 PUNTOS', 
+                                    'P2 4 PUNTOS', 'P3 4 PUNTOS', 'P4 4 PUNTOS', 'P5 4 PUNTOS', 'NOTA de Examen Cibertec', 
+                                    'NOTA FINAL', 'OBSERVACIÓN SOBRE NOTA DESAPROBATORIA', 'STATUS', 'Numeración'
                                 ]
                                 columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
                                 df_4p5s_ok = df_4p5s_ok[columnas_existentes]
