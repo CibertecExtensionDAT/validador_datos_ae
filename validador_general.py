@@ -99,21 +99,21 @@ if 'zip_buffer' not in st.session_state:
 # CONSTANTES
 # ================================================
 COLUMNAS_ARCHIVO1 = [
-    "Nro.", "Paterno", "Materno", "Nombres", "Nacimiento (DD/MM/YYYY)", "Sexo (M/F)",
-    "Grado", "Sección", "Correo institucional", "Neurodiversidad (Sí/No)", "DNI"
+    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "NACIMIENTO (DD/MM/YYYY)", "SEXO (M/F)",
+    "GRADO", "SECCIÓN", "CORREO INSTITUCIONAL", "NEURODIVERSIDAD (SÍ/NO)", "DNI"
 ]
 
 COLUMNAS_ARCHIVO2 = [
-    "Nro.", "Paterno", "Materno", "Nombres", "Curso", "Grado", "Sección", "Nota Vigesimal"
+    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
 ]
 
 COLUMNAS_EVALUADOR = [
-    "Nro.", "Paterno", "Materno", "Nombres", "Curso", "Grado", "Sección", 
-    "Nota Vigesimal", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
+    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", 
+    "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
 ]
 
 COLUMNAS_ARCHIVO_PDF = [
-    'Nro.', 'Paterno', 'Materno', 'Nombres', 'Curso', 'Grado', 'Sección', 'Nota Vigesimal'
+    'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 25%'
 ]
 
 # Constantes de validación
@@ -663,11 +663,11 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
             df_evaluador.loc[mask_vacio, col] = df_evaluador.loc[mask_vacio, col_archivo1]
             df_evaluador = df_evaluador.drop(columns=[col_archivo1])
     
-    # Asegurar que CURSO y NOTA VIGESIMAL existan
+    # Asegurar que CURSO y NOTA VIGESIMAL 25% existan
     if "CURSO" not in df_evaluador.columns:
         df_evaluador["CURSO"] = ""
-    if "NOTA VIGESIMAL" not in df_evaluador.columns:
-        df_evaluador["NOTA VIGESIMAL"] = ""
+    if "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
+        df_evaluador["NOTA VIGESIMAL 25%"] = ""
     
     # Rellenar NaN restantes con cadenas vacías
     df_evaluador = df_evaluador.fillna("")
@@ -682,13 +682,13 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     # Definir columnas finales para 1P-3P (sin NOTAS VIGESIMALES 75% ni PROMEDIO)
     columnas_1p3p = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-        "GRADO", "SECCIÓN", "NOTA VIGESIMAL", "IDENTIFICADOR", "OBSERVACIONES"
+        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%", "IDENTIFICADOR", "OBSERVACIONES"
     ]
     
     # Definir columnas finales para 4P-5S (con NOTAS VIGESIMALES 75% y PROMEDIO)
     columnas_4p5s = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-        "GRADO", "SECCIÓN", "NOTA VIGESIMAL", 
+        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%", 
         "NOTAS VIGESIMALES 75%", "PROMEDIO", "IDENTIFICADOR", "OBSERVACIONES"
     ]
     
@@ -995,7 +995,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                         str(row['NOMBRES']),
                         str(row['PATERNO']),
                         str(row['MATERNO']),
-                        str(row['NOTA VIGESIMAL'])
+                        str(row['NOTA VIGESIMAL 25%'])
                     ])
                 
                 # Crear tabla
@@ -1031,7 +1031,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 
                 # Footer con estadísticas
                 total_alumnos = len(grupo_df_sorted)
-                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL'], errors='coerce') >= 12.5])
+                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL 25%'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
                 
                 story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
@@ -1065,8 +1065,94 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         )
 
 # Funciones para Tab de Evaluadores:
+def validar_notas_numericas(df):
+    """
+    Valida que las columnas de notas cumplan con los requisitos:
+    - No pueden tener valores negativos
+    - Deben ser números (enteros o decimales)
+    - Máximo valor permitido: 20
+    
+    Args:
+        df: DataFrame con las columnas de notas
+    
+    Returns:
+        tuple: (bool, list) - (es_valido, lista_de_errores)
+    """
+    errores = []
+    columnas_notas = ["NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO"]
+    
+    for col in columnas_notas:
+        if col not in df.columns:
+            continue  # Si la columna no existe, saltarla
+        
+        for idx, valor in df[col].items():
+            # Convertir a string y limpiar
+            valor_str = str(valor).strip().upper()
+            
+            # Permitir valores vacíos, NaN, None, NP (son válidos según las reglas del comparador)
+            if valor_str in ["", "NAN", "NONE", "NP"]:
+                continue
+            
+            # Intentar convertir a número
+            try:
+                valor_num = float(valor_str)
+                
+                # Validar que no sea negativo
+                if valor_num < 0:
+                    errores.append({
+                        "fila": idx + 2,  # +2 porque idx es 0-indexed y hay cabecera
+                        "columna": col,
+                        "valor": valor_str,
+                        "error": "Valor negativo no permitido",
+                        "paterno": str(df.loc[idx, "PATERNO"]) if "PATERNO" in df.columns else "",
+                        "materno": str(df.loc[idx, "MATERNO"]) if "MATERNO" in df.columns else "",
+                        "nombres": str(df.loc[idx, "NOMBRES"]) if "NOMBRES" in df.columns else ""
+                    })
+                
+                # Validar que no sea mayor a 20
+                elif valor_num > 20:
+                    errores.append({
+                        "fila": idx + 2,
+                        "columna": col,
+                        "valor": valor_str,
+                        "error": "Valor mayor a 20 no permitido",
+                        "paterno": str(df.loc[idx, "PATERNO"]) if "PATERNO" in df.columns else "",
+                        "materno": str(df.loc[idx, "MATERNO"]) if "MATERNO" in df.columns else "",
+                        "nombres": str(df.loc[idx, "NOMBRES"]) if "NOMBRES" in df.columns else ""
+                    })
+                    
+            except ValueError:
+                # No se puede convertir a número
+                errores.append({
+                    "fila": idx + 2,
+                    "columna": col,
+                    "valor": valor_str,
+                    "error": "Valor no numérico",
+                    "paterno": str(df.loc[idx, "PATERNO"]) if "PATERNO" in df.columns else "",
+                    "materno": str(df.loc[idx, "MATERNO"]) if "MATERNO" in df.columns else "",
+                    "nombres": str(df.loc[idx, "NOMBRES"]) if "NOMBRES" in df.columns else ""
+                })
+    
+    es_valido = len(errores) == 0
+    return es_valido, errores
+
 def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
-    """Lee un archivo evaluador Excel y retorna DataFrame y metadatos"""
+    """
+    Lee un archivo evaluador Excel y retorna DataFrame y metadatos.
+    Incluye validación de notas numéricas.
+    
+    Args:
+        archivo_bytes: Bytes del archivo Excel
+        nombre_hoja: Nombre de la hoja a leer (opcional)
+    
+    Returns:
+        tuple: (df, error, fila_cabecera, hojas, df_errores)
+            - df: DataFrame con los datos (None si hay error)
+            - error: Mensaje de error de lectura (None si no hay error)
+            - fila_cabecera: Índice de la fila de cabecera (None si hay error)
+            - hojas: Lista de nombres de hojas (None si hay error)
+            - df_errores: DataFrame con errores de validación (None si no hay errores de validación)
+    """
     try:
         wb = load_workbook(BytesIO(archivo_bytes), data_only=True)
         
@@ -1075,7 +1161,7 @@ def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
             nombre_hoja = wb.sheetnames[0]
         
         if nombre_hoja not in wb.sheetnames:
-            return None, f"La hoja '{nombre_hoja}' no existe en el archivo", None, None
+            return None, f"La hoja '{nombre_hoja}' no existe en el archivo", None, None, None
         
         ws = wb[nombre_hoja]
         
@@ -1090,7 +1176,7 @@ def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
         fila_cabecera = detectar_cabecera_automatica(df, COLUMNAS_EVALUADOR)
         
         if fila_cabecera is None:
-            return None, "No se pudo detectar la cabecera automáticamente", None, None
+            return None, "No se pudo detectar la cabecera automáticamente", None, None, None
         
         # Extraer nombres de columnas de la fila de cabecera
         nombres_columnas_raw = df.iloc[fila_cabecera].tolist()
@@ -1115,25 +1201,41 @@ def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
         # Verificar que tengamos todas las columnas requeridas
         columnas_faltantes = [col for col in COLUMNAS_EVALUADOR if col not in columnas_a_mantener]
         if columnas_faltantes:
-            return None, f"No se encontraron las columnas: {', '.join(columnas_faltantes)}. Revisa que los nombres coincidan exactamente.", None, None
+            return None, f"No se encontraron las columnas: {', '.join(columnas_faltantes)}. Revisa que los nombres coincidan exactamente.", None, None, None
         
         df = df[columnas_a_mantener]
         
         # Limpiar filas vacías
         df = df.dropna(how='all')
         
-        return df, None, fila_cabecera, wb.sheetnames
+        # VALIDAR NOTAS NUMÉRICAS
+        es_valido, errores_validacion = validar_notas_numericas(df)
+        if not es_valido:
+            # Convertir errores a DataFrame para mejor visualización
+            df_errores = pd.DataFrame(errores_validacion)
+            
+            # Crear columna de nombre completo
+            df_errores['nombre_completo'] = df_errores['paterno'] + ' ' + df_errores['materno'] + ', ' + df_errores['nombres']
+            
+            # Reordenar y renombrar columnas para presentación
+            df_errores_display = df_errores[['fila', 'nombre_completo', 'columna', 'valor', 'error']].copy()
+            df_errores_display.columns = ['FILA', 'NOMBRE COMPLETO', 'COLUMNA', 'VALOR', 'TIPO DE ERROR']
+            
+            # Retornar None con el DataFrame de errores
+            return None, None, None, None, df_errores_display
+        
+        return df, None, fila_cabecera, wb.sheetnames, None
         
     except Exception as e:
-        return None, f"Error al leer archivo: {str(e)}", None, None
+        return None, f"Error al leer archivo: {str(e)}", None, None, None
 
 def comparar_evaluadores(df_base, df_revisar):
     """
     Compara dos archivos evaluadores.
     - Ambos deben tener las mismas columnas en el mismo orden
     - Todo debe ser idéntico EXCEPTO la columna "NOTAS VIGESIMALES 75%"
-    - En el archivo BASE: pueden estar vacías "Nota Vigesimal", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
-    - En el archivo A REVISAR: "Nota Vigesimal" y "NOTAS VIGESIMALES 75%" deben estar completas
+    - En el archivo BASE: pueden estar vacías "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
+    - En el archivo A REVISAR: "NOTA VIGESIMAL 25%" y "NOTAS VIGESIMALES 75%" deben estar completas
     """
     errores = []
     
@@ -1212,7 +1314,7 @@ def comparar_evaluadores(df_base, df_revisar):
     
     for col in columnas_comparar:
         # Para estas columnas opcionales, no comparar si están vacías en BASE
-        columnas_opcionales_base = ["Nota Vigesimal", "PROMEDIO", "OBSERVACIONES"]
+        columnas_opcionales_base = ["NOTA VIGESIMAL 25%", "PROMEDIO", "OBSERVACIONES"]
         
         for idx in range(min(len(df_base), len(df_revisar))):
             val_base = str(df_base.loc[idx, col]).strip().upper()
@@ -1231,9 +1333,9 @@ def comparar_evaluadores(df_base, df_revisar):
             
             if val_base != val_revisar:
                 # Obtener nombres y apellidos para el reporte
-                paterno = str(df_base.loc[idx, "Paterno"]).strip() if "Paterno" in df_base.columns else ""
-                materno = str(df_base.loc[idx, "Materno"]).strip() if "Materno" in df_base.columns else ""
-                nombres = str(df_base.loc[idx, "Nombres"]).strip() if "Nombres" in df_base.columns else ""
+                paterno = str(df_base.loc[idx, "PATERNO"]).strip() if "PATERNO" in df_base.columns else ""
+                materno = str(df_base.loc[idx, "MATERNO"]).strip() if "MATERNO" in df_base.columns else ""
+                nombres = str(df_base.loc[idx, "NOMBRES"]).strip() if "NOMBRES" in df_base.columns else ""
                 
                 errores.append({
                     "tipo": "diferencia_contenido",
@@ -1257,9 +1359,9 @@ def comparar_evaluadores(df_base, df_revisar):
             
             if val_revisar in ["", "NAN", "NONE", "NP"]:
                 # Obtener nombres y apellidos para el reporte
-                paterno = str(df_revisar.loc[idx, "Paterno"]).strip() if "Paterno" in df_revisar.columns else ""
-                materno = str(df_revisar.loc[idx, "Materno"]).strip() if "Materno" in df_revisar.columns else ""
-                nombres = str(df_revisar.loc[idx, "Nombres"]).strip() if "Nombres" in df_revisar.columns else ""
+                paterno = str(df_revisar.loc[idx, "PATERNO"]).strip() if "PATERNO" in df_revisar.columns else ""
+                materno = str(df_revisar.loc[idx, "MATERNO"]).strip() if "MATERNO" in df_revisar.columns else ""
+                nombres = str(df_revisar.loc[idx, "NOMBRES"]).strip() if "NOMBRES" in df_revisar.columns else ""
                 
                 errores.append({
                     "tipo": "campo_vacio_revisar",
@@ -1276,16 +1378,16 @@ def comparar_evaluadores(df_base, df_revisar):
                     "detalle": None
                 })
     
-    # 6. Verificar que "Nota Vigesimal" esté completa en archivo A REVISAR
-    if "Nota Vigesimal" in columnas_revisar:
+    # 6. Verificar que "NOTA VIGESIMAL 25%" esté completa en archivo A REVISAR
+    if "NOTA VIGESIMAL 25%" in columnas_revisar:
         for idx in range(len(df_revisar)):
-            val_revisar = str(df_revisar.loc[idx, "Nota Vigesimal"]).strip().upper()
+            val_revisar = str(df_revisar.loc[idx, "NOTA VIGESIMAL 25%"]).strip().upper()
             
             if val_revisar in ["", "NAN", "NONE", "NP"]:
                 # Obtener nombres y apellidos para el reporte
-                paterno = str(df_revisar.loc[idx, "Paterno"]).strip() if "Paterno" in df_revisar.columns else ""
-                materno = str(df_revisar.loc[idx, "Materno"]).strip() if "Materno" in df_revisar.columns else ""
-                nombres = str(df_revisar.loc[idx, "Nombres"]).strip() if "Nombres" in df_revisar.columns else ""
+                paterno = str(df_revisar.loc[idx, "PATERNO"]).strip() if "PATERNO" in df_revisar.columns else ""
+                materno = str(df_revisar.loc[idx, "MATERNO"]).strip() if "MATERNO" in df_revisar.columns else ""
+                nombres = str(df_revisar.loc[idx, "NOMBRES"]).strip() if "NOMBRES" in df_revisar.columns else ""
                 
                 errores.append({
                     "tipo": "campo_vacio_revisar",
@@ -1293,11 +1395,11 @@ def comparar_evaluadores(df_base, df_revisar):
                     "paterno": paterno,
                     "materno": materno,
                     "nombres": nombres,
-                    "descripcion": "Campo 'Nota Vigesimal' vacío o con 'NP'",
+                    "descripcion": "Campo 'NOTA VIGESIMAL 25%' vacío o con 'NP'",
                     "archivo": "A REVISAR",
                     "fila": idx + 2,
-                    "columna": "Nota Vigesimal",
-                    "valor_base": str(df_base.loc[idx, "Nota Vigesimal"]) if idx < len(df_base) else "N/A",
+                    "columna": "NOTA VIGESIMAL 25%",
+                    "valor_base": str(df_base.loc[idx, "NOTA VIGESIMAL 25%"]) if idx < len(df_base) else "N/A",
                     "valor_revisar": "(vacío)",
                     "detalle": None
                 })
@@ -2447,7 +2549,7 @@ with tab1:
             <h4>📄 Instrucciones</h4>
             <p>Sube el archivo Excel con las notas de los cursos.</p>
             <p><strong>Columnas requeridas:</strong></p>
-            <code>Nro., Paterno, Materno, Nombres, Curso, Grado, Sección,  Nota Vigesimal</code>
+            <code>NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%</code>
         </div>
         """, unsafe_allow_html=True)
         
@@ -2519,7 +2621,7 @@ with tab1:
                             # Si la hoja tiene datos, procesarla; si no, omitirla
                             if not df_1p3p.empty:
                                 # Convertir numéricas a enteros
-                                df_1p3p = convertir_numericas_a_entero(df_1p3p, columnas=["GRADO", "NOTA VIGESIMAL"])
+                                df_1p3p = convertir_numericas_a_entero(df_1p3p, columnas=["GRADO", "NOTA VIGESIMAL 25%"])
 
                                 # Homologar datos
                                 df_1p3p = homologar_dataframe(df_1p3p)
@@ -2537,8 +2639,8 @@ with tab1:
                                 errores_validacion_1p3p = []
 
                                 # Completar valores vacíos en NOTA VIGESIMAL con "NP"
-                                if "NOTA VIGESIMAL" in df_1p3p.columns:
-                                    df_1p3p["NOTA VIGESIMAL"] = df_1p3p["NOTA VIGESIMAL"].fillna("NP").replace("", "NP")
+                                if "NOTA VIGESIMAL 25%" in df_1p3p.columns:
+                                    df_1p3p["NOTA VIGESIMAL 25%"] = df_1p3p["NOTA VIGESIMAL 25%"].fillna("NP").replace("", "NP")
 
                                 # Validar y mapear grados
                                 df_1p3p, errores_grados = validar_y_mapear_grados(df_1p3p, "GRADO", tipo_validacion="1p3p")
@@ -2634,7 +2736,7 @@ with tab1:
                             st.error("❌ Error de cabecera en la hoja 1P-3P")
                             st.warning("⚠️ No se pudo detectar cabecera automáticamente en 1P-3P")
                             st.info("Por favor, verifica que la hoja tenga las columnas correctas:")
-                            st.code("Nro., Paterno, Materno, Nombres, Curso, Grado, Sección, Nota Vigesimal")
+                            st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
                             st.stop()
                     
                     # ====================================
@@ -2673,7 +2775,7 @@ with tab1:
                             # Si la hoja tiene datos, procesarla; si no, omitirla
                             if not df2.empty:
                                 # Convertir numéricas a enteros
-                                df2 = convertir_numericas_a_entero(df2, columnas=["GRADO", "NOTA VIGESIMAL"])
+                                df2 = convertir_numericas_a_entero(df2, columnas=["GRADO", "NOTA VIGESIMAL 25%"])
 
                                 # Homologar datos
                                 df2 = homologar_dataframe(df2)
@@ -2708,12 +2810,12 @@ with tab1:
                                 else:
                                     st.success("✅ Validaciones de grados y secciones pasadas (4P-5S)")
 
-                                # Completar valores vacíos en NOTA VIGESIMAL con "NP"
-                                if "NOTA VIGESIMAL" in df2.columns:
-                                    df2["NOTA VIGESIMAL"] = df2["NOTA VIGESIMAL"].fillna("NP").replace("", "NP")
+                                # Completar valores vacíos en NOTA VIGESIMAL 25% con "NP"
+                                if "NOTA VIGESIMAL 25%" in df2.columns:
+                                    df2["NOTA VIGESIMAL 25%"] = df2["NOTA VIGESIMAL 25%"].fillna("NP").replace("", "NP")
                                 
                                 # Validar campos vacíos
-                                columnas_oblig = ["PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL"]
+                                columnas_oblig = ["PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"]
                                 filas_vacias = df2[df2[columnas_oblig].isnull().any(axis=1)]
                                 
                                 if not filas_vacias.empty:
@@ -2792,7 +2894,7 @@ with tab1:
                             st.error("❌ Error de cabecera en la hoja 4P-5S")
                             st.warning("⚠️ No se pudo detectar cabecera automáticamente en 4P-5S")
                             st.info("Por favor, verifica que la hoja tenga las columnas correctas:")
-                            st.code("Nro., Paterno, Materno, Nombres, Curso, Grado, Sección, Nota Vigesimal")
+                            st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
                             st.stop()
 
                     # ====================================
@@ -2854,7 +2956,7 @@ with tab1:
                             with col_1p3p_0:
                                 # Archivo homologado
                                 df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR"], errors="ignore")
-                                df_sin_notas_1p3p["NOTA VIGESIMAL"] = df_sin_notas_1p3p["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
+                                df_sin_notas_1p3p["NOTA VIGESIMAL 25%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
                                 buffer_1p3p = guardar_con_formato_original(
                                     df_procesado=df_sin_notas_1p3p,
                                     archivo_original_bytes=st.session_state.archivo2_bytes,
@@ -2997,7 +3099,7 @@ with tab1:
                                         mapeo_columnas[col] = 'Grado'
                                     elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
                                         mapeo_columnas[col] = 'Sección'
-                                    elif col_upper == 'NOTA VIGESIMAL':
+                                    elif col_upper == 'NOTA VIGESIMAL 25%':
                                         mapeo_columnas[col] = 'Nota Laboratorio'
                                 
                                 df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
@@ -3044,7 +3146,7 @@ with tab1:
                             with col_1p3p_0:
                                 # Archivo homologado
                                 df_sin_notas_4p5s = df_4p5s_procesado.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
-                                df_sin_notas_4p5s["NOTA VIGESIMAL"] = df_sin_notas_4p5s["NOTA VIGESIMAL"].astype(str).replace('NAN', 'NP')
+                                df_sin_notas_4p5s["NOTA VIGESIMAL 25%"] = df_sin_notas_4p5s["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
                                 buffer_4p5s = guardar_con_formato_original(
                                     df_procesado=df_sin_notas_4p5s,
                                     archivo_original_bytes=st.session_state.archivo2_bytes,
@@ -3198,8 +3300,9 @@ with tab2:
     st.markdown("### Comparación de Archivos Evaluadores")
     st.info("""
     📌 **Instrucciones:**
-    - Sube el archivo **BASE** (puede tener campos vacíos en: Nota Vigesimal, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES)
-    - Sube el archivo **A REVISAR** (debe tener completos: Nota Vigesimal y NOTAS VIGESIMALES 75%)
+    - Formato tipo "Archivo_4P-5S_ACTUAL.xlsx"
+    - Sube el archivo **BASE** (puede tener campos vacíos en: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES)
+    - Sube el archivo **A REVISAR** (debe tener completos: NOTA VIGESIMAL 25% y NOTAS VIGESIMALES 75%)
     - **La única diferencia permitida** es en la columna "NOTAS VIGESIMALES 75%"
     """)
     
@@ -3208,7 +3311,7 @@ with tab2:
     # COLUMNA IZQUIERDA: Archivo Base
     with col_izq:
         st.markdown("#### 📄 Archivo BASE")
-        st.caption("Campos opcionales: Nota Vigesimal, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES")
+        st.caption("Campos opcionales: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES")
         
         archivo_base = st.file_uploader(
             "Selecciona el archivo evaluador BASE",
@@ -3231,13 +3334,41 @@ with tab2:
             )
             
             if st.button("✅ Cargar Archivo BASE", key="btn_cargar_base"):
-                df_base, error_base, fila_cab_base, _ = leer_archivo_evaluador(
+                df_base, error_base, fila_cab_base, _, df_errores_base = leer_archivo_evaluador(
                     archivo_base_bytes,
                     hoja_base_seleccionada
                 )
                 
                 if error_base:
                     st.error(f"❌ {error_base}")
+                elif df_errores_base is not None:
+                    # Mostrar errores de validación
+                    st.error(f"❌ Se encontraron {len(df_errores_base)} errores en las columnas de notas")
+                    
+                    st.warning("""
+                    📋 **REQUISITOS DE VALIDACIÓN:**
+                    - Los valores deben ser numéricos (enteros o decimales)
+                    - No se permiten valores negativos
+                    - El valor máximo permitido es 20
+                    - Se permiten celdas vacías o con 'NP'
+                    """)
+                    
+                    st.markdown("### 📊 Tabla de Errores Encontrados")
+                    st.dataframe(
+                        df_errores_base,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    # Botón para descargar errores
+                    csv_errores = df_errores_base.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📥 Descargar Lista de Errores (CSV)",
+                        data=csv_errores,
+                        file_name="errores_validacion_base.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
                 else:
                     st.session_state.comparador_archivo_base = {
                         'df': df_base,
@@ -3248,13 +3379,13 @@ with tab2:
                     st.success(f"🔍 Cabecera detectada en fila {fila_cab_base + 1}")
             
             if st.session_state.comparador_archivo_base:
-                with st.expander("👁️ Vista previa - Archivo BASE"):
-                    st.dataframe(st.session_state.comparador_archivo_base['df'].head(10), hide_index=True)
+                with st.expander("Vista previa - Archivo BASE", expanded=True):
+                    st.dataframe(st.session_state.comparador_archivo_base['df'], hide_index=True)
     
     # COLUMNA DERECHA: Archivo a Revisar
     with col_der:
         st.markdown("#### 📝 Archivo A REVISAR")
-        st.caption("Debe tener completos: Nota Vigesimal y NOTAS VIGESIMALES 75%")
+        st.caption("Debe tener completos: NOTA VIGESIMAL 25% y NOTAS VIGESIMALES 75%")
         
         archivo_revisar = st.file_uploader(
             "Selecciona el archivo evaluador A REVISAR",
@@ -3277,13 +3408,41 @@ with tab2:
             )
             
             if st.button("✅ Cargar Archivo A REVISAR", key="btn_cargar_revisar"):
-                df_revisar, error_revisar, fila_cab_revisar, _ = leer_archivo_evaluador(
+                df_revisar, error_revisar, fila_cab_revisar, _, df_errores_revisar = leer_archivo_evaluador(
                     archivo_revisar_bytes,
                     hoja_revisar_seleccionada
                 )
                 
                 if error_revisar:
                     st.error(f"❌ {error_revisar}")
+                elif df_errores_revisar is not None:
+                    # Mostrar errores de validación
+                    st.error(f"❌ Se encontraron {len(df_errores_revisar)} errores en las columnas de notas")
+                    
+                    st.warning("""
+                    📋 **REQUISITOS DE VALIDACIÓN:**
+                    - Los valores deben ser numéricos (enteros o decimales)
+                    - No se permiten valores negativos
+                    - El valor máximo permitido es 20
+                    - Se permiten celdas vacías o con 'NP'
+                    """)
+                    
+                    st.markdown("### 📊 Tabla de Errores Encontrados")
+                    st.dataframe(
+                        df_errores_revisar,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    # Botón para descargar errores
+                    csv_errores = df_errores_revisar.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📥 Descargar Lista de Errores (CSV)",
+                        data=csv_errores,
+                        file_name="errores_validacion_revisar.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
                 else:
                     st.session_state.comparador_archivo_revisar = {
                         'df': df_revisar,
@@ -3292,10 +3451,10 @@ with tab2:
                     }
                     st.success(f"✅ Archivo A REVISAR cargado ({len(df_revisar)} registros)")
                     st.success(f"🔍 Cabecera detectada en fila {fila_cab_revisar + 1}")
-            
+
             if st.session_state.comparador_archivo_revisar:
-                with st.expander("👁️ Vista previa - Archivo A REVISAR"):
-                    st.dataframe(st.session_state.comparador_archivo_revisar['df'].head(10), hide_index=True)
+                with st.expander("Vista previa - Archivo A REVISAR", expanded=True):
+                    st.dataframe(st.session_state.comparador_archivo_revisar['df'], hide_index=True)
     
     # SECCIÓN DE COMPARACIÓN
     st.divider()
@@ -3445,7 +3604,7 @@ with tab3:
                 
                 if fila_cabecera is None:
                     st.error("❌ No se pudo detectar la cabecera automáticamente")
-                    st.info("Columnas esperadas: Nro., Paterno, Materno, Nombres, Curso, Grado, Sección, Nota Vigesimal")
+                    st.info("Columnas esperadas: NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
                     st.stop()
                 
                 # Leer con cabecera detectada
@@ -3453,7 +3612,7 @@ with tab3:
                 
                 # Normalizar nombres de columnas manteniendo formato correcto
                 columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
-                cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal"]
+                cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
                 
                 # Mapear columnas
                 cols_a_usar = []
@@ -3472,7 +3631,7 @@ with tab3:
                 # Renombrar a formato estándar (MAYÚSCULAS)
                 df_reporte.columns = [
                     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                    "GRADO", "SECCIÓN", "NOTA VIGESIMAL"
+                    "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
                 ]
                 
                 # Limpiar datos
