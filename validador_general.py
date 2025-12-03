@@ -2352,6 +2352,11 @@ with tab1:
                             col1, col2 = st.columns(2)
                             with col1:
                                 df_descarga = df.drop(columns=["IDENTIFICADOR", "Nº"], errors="ignore")
+
+                                # Limpieza de NAN inline
+                                df_descarga = df_descarga.fillna("")
+                                df_descarga = df_descarga.replace(["NAN", "nan", "NaN"], "")
+
                                 buffer = guardar_con_formato_original(
                                     df_procesado=df_descarga,
                                     archivo_original_bytes=st.session_state.archivo1_bytes,
@@ -2491,6 +2496,11 @@ with tab1:
                                     col1, col2 = st.columns(2)
                                     with col1:
                                         df_descarga = df.drop(columns=["IDENTIFICADOR", "Nº"], errors="ignore")
+
+                                        # Limpieza de NAN inline
+                                        df_descarga = df_descarga.fillna("")
+                                        df_descarga = df_descarga.replace(["NAN", "nan", "NaN"], "")
+
                                         buffer = guardar_con_formato_original(
                                             df_procesado=df_descarga,
                                             archivo_original_bytes=st.session_state.archivo1_bytes,
