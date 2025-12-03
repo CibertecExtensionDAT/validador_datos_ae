@@ -1467,6 +1467,9 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         
         # Crear nueva hoja
         ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
+
+        # Referencia para el estilo de "Nombre del Colegio:"
+        celda_estilo_referencia = None
         
         # Si la hoja existe en el original, copiar las primeras 7 filas
         if nombre_hoja in wb_original.sheetnames:
@@ -1478,6 +1481,10 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
                     celda_original = ws_original.cell(row=fila_idx, column=col_idx)
                     celda_nueva = ws_nueva.cell(row=fila_idx, column=col_idx)
                     
+                    # Guardar referencia del estilo de "Nombre del Colegio:" (generalmente fila 5)
+                    if fila_idx == 5 and col_idx == 1 and celda_estilo_referencia is None:
+                        celda_estilo_referencia = celda_original
+
                     # Copiar valor
                     celda_nueva.value = celda_original.value
                     
@@ -1517,16 +1524,50 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
                     except:
                         pass
             
-            # Copiar merges de las primeras 7 filas
+            # Copiar merges de las primeras 6 filas
             try:
                 for merged_range in ws_original.merged_cells.ranges:
-                    if merged_range.min_row <= 7:
+                    if merged_range.min_row <= 6:
                         ws_nueva.merge_cells(str(merged_range))
             except:
                 pass
         
-        # Agregar cabecera personalizada en fila 8
-        fila_cabecera = 8
+        # Agregar "Nombre del Evaluador:" en fila 7
+        fila_nombre_evaluador = 7
+        celda_evaluador = ws_nueva.cell(row=fila_nombre_evaluador, column=1)
+        celda_evaluador.value = "Nombre del Evaluador:"
+        
+        # Copiar el estilo de "Nombre del Colegio:" si existe
+        if celda_estilo_referencia:
+            try:
+                if celda_estilo_referencia.fill and celda_estilo_referencia.fill.start_color:
+                    celda_evaluador.fill = copy(celda_estilo_referencia.fill)
+            except:
+                pass
+            
+            try:
+                if celda_estilo_referencia.font:
+                    celda_evaluador.font = Font(bold=True, size=16) #copy(celda_estilo_referencia.font)
+            except:
+                pass
+            
+            try:
+                if celda_estilo_referencia.alignment:
+                    celda_evaluador.alignment = Alignment(horizontal="left", vertical="center") #copy(celda_estilo_referencia.alignment)
+            except:
+                pass
+            
+            try:
+                if celda_estilo_referencia.border:
+                    celda_evaluador.border = copy(celda_estilo_referencia.border)
+            except:
+                pass
+        else:
+            celda_evaluador.font = Font(bold=True, size=10)
+            celda_evaluador.alignment = Alignment(horizontal="left", vertical="center")
+        
+        # Agregar cabecera personalizada (OK) en fila 9
+        fila_cabecera = 9
         
         # Estilo para la cabecera
         header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
@@ -1540,8 +1581,8 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             celda.font = header_font
             celda.alignment = header_alignment
         
-        # Agregar datos a partir de la fila 9
-        fila_inicio_datos = 9
+        # Agregar datos a partir de la fila 10
+        fila_inicio_datos = 10
         for row_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
             for col_idx, value in enumerate(row, start=1):
                 celda = ws_nueva.cell(row=row_idx, column=col_idx)
