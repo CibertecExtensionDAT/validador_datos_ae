@@ -2558,8 +2558,13 @@ with tab1:
         <div style='background-color: #78808C; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
             <h4>📄 Instrucciones</h4>
             <p>Sube el archivo Excel con las notas de los cursos.</p>
-            <p><strong>Columnas requeridas:</strong></p>
+            <p>Columnas requeridas para <strong>1P-3P</strong>:</p>
+            <code>NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 100%</code>
+            <p></p>
+            <p>Columnas requeridas para <strong>4P-5S</strong>:</p>
             <code>NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%</code>
+
+                    
         </div>
         """, unsafe_allow_html=True)
         
