@@ -2927,7 +2927,7 @@ with tab1:
                                         
                                     # Marcar como procesado
                                     df_4p5s_procesado = df2
-                                    df_vp_4p5s = df2.copy().drop(columns=["Nro."], errors="ignore")
+                                    df_vp_4p5s = df2.copy().drop(columns=["Nro.", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
                                     
                                     # Vista previa
                                     st.dataframe(df_vp_4p5s, use_container_width=True, hide_index=True)
