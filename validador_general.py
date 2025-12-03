@@ -103,7 +103,15 @@ COLUMNAS_ARCHIVO1 = [
     "GRADO", "SECCIÓN", "CORREO INSTITUCIONAL", "NEURODIVERSIDAD (SÍ/NO)", "DNI"
 ]
 
-COLUMNAS_ARCHIVO2 = [
+#COLUMNAS_ARCHIVO2 = [
+#    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
+#]
+
+COLUMNAS_ARCHIVO2_1P3P = [
+    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
+]
+
+COLUMNAS_ARCHIVO2_4P5S = [
     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
 ]
 
@@ -112,7 +120,15 @@ COLUMNAS_EVALUADOR = [
     "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
 ]
 
-COLUMNAS_ARCHIVO_PDF = [
+#COLUMNAS_ARCHIVO_PDF = [
+#    'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 25%'
+#]
+
+COLUMNAS_ARCHIVO_PDF_1P3P = [
+    'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 100%'
+]
+
+COLUMNAS_ARCHIVO_PDF_4P5S = [
     'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 25%'
 ]
 
@@ -666,9 +682,19 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     # Asegurar que CURSO y NOTA VIGESIMAL 25% existan
     if "CURSO" not in df_evaluador.columns:
         df_evaluador["CURSO"] = ""
-    if "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
-        df_evaluador["NOTA VIGESIMAL 25%"] = ""
+    #if "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
+    #    df_evaluador["NOTA VIGESIMAL 25%"] = ""
     
+    # Detectar si es 1P-3P o 4P-5S por los grados presentes
+    grados_presentes = df_evaluador["GRADO"].unique()
+    es_1p3p = any(g in ["1P", "2P", "3P"] for g in grados_presentes if pd.notna(g))
+    es_4p5s = any(g in ["4P", "5P", "6P", "1S", "2S", "3S", "4S", "5S"] for g in grados_presentes if pd.notna(g))
+
+    if es_1p3p and "NOTA VIGESIMAL 100%" not in df_evaluador.columns:
+        df_evaluador["NOTA VIGESIMAL 100%"] = ""
+    if es_4p5s and "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
+        df_evaluador["NOTA VIGESIMAL 25%"] = ""
+
     # Rellenar NaN restantes con cadenas vacías
     df_evaluador = df_evaluador.fillna("")
     
@@ -682,7 +708,7 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     # Definir columnas finales para 1P-3P (sin NOTAS VIGESIMALES 75% ni PROMEDIO)
     columnas_1p3p = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%", "IDENTIFICADOR", "OBSERVACIONES"
+        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%", "IDENTIFICADOR", "OBSERVACIONES"
     ]
     
     # Definir columnas finales para 4P-5S (con NOTAS VIGESIMALES 75% y PROMEDIO)
@@ -2610,7 +2636,7 @@ with tab1:
                         st.markdown("### 📘 Procesando Hoja: 1P-3P")
                         
                         df_1p3p_original = pd.read_excel(archivo2, sheet_name="1P-3P", header=None)
-                        fila_detectada_1p3p = detectar_cabecera_automatica(df_1p3p_original, COLUMNAS_ARCHIVO2)
+                        fila_detectada_1p3p = detectar_cabecera_automatica(df_1p3p_original, COLUMNAS_ARCHIVO2_1P3P)
                         
                         if fila_detectada_1p3p is not None:
                             # GUARDAR ÍNDICE DE CABECERA
@@ -2622,13 +2648,13 @@ with tab1:
                             # Procesar columnas
                             columnas_norm = {c.strip().lower(): c for c in df_1p3p.columns}
                             cols_a_usar = []
-                            for col_req in COLUMNAS_ARCHIVO2:
+                            for col_req in COLUMNAS_ARCHIVO2_1P3P:
                                 col_norm = col_req.strip().lower()
                                 if col_norm in columnas_norm:
                                     cols_a_usar.append(columnas_norm[col_norm])
                             
                             df_1p3p = df_1p3p[cols_a_usar]
-                            df_1p3p.columns = [col.upper() for col in COLUMNAS_ARCHIVO2]
+                            df_1p3p.columns = [col.upper() for col in COLUMNAS_ARCHIVO2_1P3P]
                             
                             # Eliminar filas con campos vacíos en PATERNO, MATERNO y NOMBRES
                             df_1p3p = limpiar_filas_vacias(df_1p3p, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
@@ -2636,7 +2662,7 @@ with tab1:
                             # Si la hoja tiene datos, procesarla; si no, omitirla
                             if not df_1p3p.empty:
                                 # Convertir numéricas a enteros
-                                df_1p3p = convertir_numericas_a_entero(df_1p3p, columnas=["GRADO", "NOTA VIGESIMAL 25%"])
+                                df_1p3p = convertir_numericas_a_entero(df_1p3p, columnas=["GRADO", "NOTA VIGESIMAL 100%"])
 
                                 # Homologar datos
                                 df_1p3p = homologar_dataframe(df_1p3p)
@@ -2654,8 +2680,8 @@ with tab1:
                                 errores_validacion_1p3p = []
 
                                 # Completar valores vacíos en NOTA VIGESIMAL con "NP"
-                                if "NOTA VIGESIMAL 25%" in df_1p3p.columns:
-                                    df_1p3p["NOTA VIGESIMAL 25%"] = df_1p3p["NOTA VIGESIMAL 25%"].fillna("NP").replace("", "NP")
+                                if "NOTA VIGESIMAL 100%" in df_1p3p.columns:
+                                    df_1p3p["NOTA VIGESIMAL 100%"] = df_1p3p["NOTA VIGESIMAL 100%"].fillna("NP").replace("", "NP")
 
                                 # Validar y mapear grados
                                 df_1p3p, errores_grados = validar_y_mapear_grados(df_1p3p, "GRADO", tipo_validacion="1p3p")
@@ -2751,7 +2777,7 @@ with tab1:
                             st.error("❌ Error de cabecera en la hoja 1P-3P")
                             st.warning("⚠️ No se pudo detectar cabecera automáticamente en 1P-3P")
                             st.info("Por favor, verifica que la hoja tenga las columnas correctas:")
-                            st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
+                            st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 100%")
                             st.stop()
                     
                     # ====================================
@@ -2764,7 +2790,7 @@ with tab1:
                         st.markdown("### 📗 Procesando Hoja: 4P-5S")
                         
                         df_original2 = pd.read_excel(archivo2, sheet_name="4P-5S", header=None)
-                        fila_detectada2 = detectar_cabecera_automatica(df_original2, COLUMNAS_ARCHIVO2)
+                        fila_detectada2 = detectar_cabecera_automatica(df_original2, COLUMNAS_ARCHIVO2_4P5S)
                         
                         if fila_detectada2 is not None:
                             # GUARDAR ÍNDICE DE CABECERA
@@ -2776,13 +2802,13 @@ with tab1:
                             # Procesar columnas
                             columnas_norm = {c.strip().lower(): c for c in df2.columns}
                             cols_a_usar = []
-                            for col_req in COLUMNAS_ARCHIVO2:
+                            for col_req in COLUMNAS_ARCHIVO2_4P5S:
                                 col_norm = col_req.strip().lower()
                                 if col_norm in columnas_norm:
                                     cols_a_usar.append(columnas_norm[col_norm])
                             
                             df2 = df2[cols_a_usar]
-                            df2.columns = [col.upper() for col in COLUMNAS_ARCHIVO2]
+                            df2.columns = [col.upper() for col in COLUMNAS_ARCHIVO2_4P5S]
 
                             # Eliminar filas con campos vacíos en PATERNO, MATERNO y NOMBRES
                             df2 = limpiar_filas_vacias(df2, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
@@ -2971,7 +2997,7 @@ with tab1:
                             with col_1p3p_0:
                                 # Archivo homologado
                                 df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR"], errors="ignore")
-                                df_sin_notas_1p3p["NOTA VIGESIMAL 25%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
+                                df_sin_notas_1p3p["NOTA VIGESIMAL 100%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 100%"].astype(str).replace('NAN', 'NP')
                                 buffer_1p3p = guardar_con_formato_original(
                                     df_procesado=df_sin_notas_1p3p,
                                     archivo_original_bytes=st.session_state.archivo2_bytes,
@@ -3266,7 +3292,7 @@ with tab1:
                                 with ZipFile(zip_1p3p_buffer, 'w') as zip_file:
                                     # 1. Homologado
                                     df_sin_notas_1p3p = df_1p3p_procesado.drop(columns=["IDENTIFICADOR"], errors="ignore")
-                                    df_sin_notas_1p3p["NOTA VIGESIMAL 25%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 25%"].astype(str).replace('NAN', 'NP')
+                                    df_sin_notas_1p3p["NOTA VIGESIMAL 100%"] = df_sin_notas_1p3p["NOTA VIGESIMAL 100%"].astype(str).replace('NAN', 'NP')
                                     buffer_homologado_1p3p = guardar_con_formato_original(
                                         df_procesado=df_sin_notas_1p3p,
                                         archivo_original_bytes=st.session_state.archivo2_bytes,
@@ -3789,7 +3815,7 @@ with tab3:
                 df_temp = pd.read_excel(archivo_reporte, header=None)
                 
                 # Detectar cabecera
-                fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_ARCHIVO2)
+                fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_ARCHIVO2_4P5S)
                 
                 if fila_cabecera is None:
                     st.error("❌ No se pudo detectar la cabecera automáticamente")
@@ -3801,7 +3827,11 @@ with tab3:
                 
                 # Normalizar nombres de columnas manteniendo formato correcto
                 columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
-                cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
+                #cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
+                if tipo_reporte == "1P-3P":
+                    cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 100%"]
+                else:  # 4P-5S
+                    cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
                 
                 # Mapear columnas
                 cols_a_usar = []
@@ -3818,10 +3848,20 @@ with tab3:
                 df_reporte = df_reporte[cols_a_usar]
                 
                 # Renombrar a formato estándar (MAYÚSCULAS)
-                df_reporte.columns = [
-                    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                    "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
-                ]
+                #df_reporte.columns = [
+                #    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                #    "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
+                #]
+                if tipo_reporte == "1P-3P":
+                    df_reporte.columns = [
+                        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
+                    ]
+                else:  # 4P-5S
+                    df_reporte.columns = [
+                        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
+                    ]
                 
                 # Limpiar datos
                 df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
