@@ -3063,9 +3063,74 @@ with tab1:
                             with col_1p3p_3:
                                 # OK 1P-3P
                                 if len(df_1p3p_ok) > 0:
+                                    
+                                    # Resetear índice
+                                    df_1p3p_ok = df_1p3p_ok.reset_index(drop=True)
+                                    
+                                    # Normalizar nombres de columnas
+                                    df_1p3p_ok.columns = df_1p3p_ok.columns.str.strip()
+                                    
+                                    # Mapear columnas a formato certificado
+                                    mapeo_columnas = {}
+                                    for col in df_1p3p_ok.columns:
+                                        col_upper = col.upper().strip()
+                                        
+                                        if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
+                                            mapeo_columnas[col] = 'NRO.'
+                                        elif col_upper == 'PATERNO':
+                                            mapeo_columnas[col] = 'PATERNO'
+                                        elif col_upper == 'MATERNO':
+                                            mapeo_columnas[col] = 'MATERNO'
+                                        elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
+                                            mapeo_columnas[col] = 'NOMBRE'
+                                        elif col_upper == 'CURSO':
+                                            mapeo_columnas[col] = 'CURSO'
+                                        elif col_upper == 'GRADO':
+                                            mapeo_columnas[col] = 'GRADO'
+                                        elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
+                                            mapeo_columnas[col] = 'SECCIÓN'
+                                        elif col_upper == 'NOTA VIGESIMAL 100%':
+                                            mapeo_columnas[col] = 'NOTA LABORATORIO'
+                                    
+                                    df_1p3p_ok = df_1p3p_ok.rename(columns=mapeo_columnas)
+                                    
+                                    # Eliminar columnas no necesarias
+                                    columnas_a_eliminar = []
+                                    for col in df_1p3p_ok.columns:
+                                        col_upper = col.upper()
+                                        if 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                            columnas_a_eliminar.append(col)
+                                    
+                                    df_1p3p_ok = df_1p3p_ok.drop(columns=columnas_a_eliminar, errors='ignore')
+                                    
+                                    # Agregar columnas nuevas para certificado 1P-3P
+                                    nuevas_columnas = [
+                                        '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                        'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
+                                        'NOTA EVALUADOR', 'NOTA FINAL', 
+                                        'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                    ]
+                                    for col in nuevas_columnas:
+                                        if col not in df_1p3p_ok.columns:
+                                            df_1p3p_ok[col] = ''
+                                    
+                                    # Reordenar columnas específicas para 1P-3P
+                                    columnas_certificado_1p3p = [
+                                        'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
+                                        'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                        'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 
+                                        'NOTA FINAL', 'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                    ]
+                                    columnas_existentes = [col for col in columnas_certificado_1p3p if col in df_1p3p_ok.columns]
+                                    df_1p3p_ok = df_1p3p_ok[columnas_existentes]
+                                    
+                                    # Regenerar Nro secuencial
+                                    if 'NRO.' in df_1p3p_ok.columns:
+                                        df_1p3p_ok['NRO.'] = range(1, len(df_1p3p_ok) + 1)
+                                    
                                     dict_ok_1p3p = {
                                         "1P-3P": {
-                                            'df': df_1p3p_ok.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'df': df_1p3p_ok,
                                             'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
                                         }
                                     }
@@ -3079,7 +3144,7 @@ with tab1:
                                         file_name=f"{st.session_state.nombre_colegio}_1P-3P_OK.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True,
-                                        help="Solo aprobados"
+                                        help="Solo aprobados con formato certificado"
                                     )
                                 else:
                                     st.info("Sin aprobados en 1P-3P")
@@ -3127,21 +3192,21 @@ with tab1:
                                     col_upper = col.upper().strip()
                                     
                                     if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
-                                        mapeo_columnas[col] = 'Nro'
+                                        mapeo_columnas[col] = 'NRO.'
                                     elif col_upper == 'PATERNO':
-                                        mapeo_columnas[col] = 'Paterno'
+                                        mapeo_columnas[col] = 'PATERNO'
                                     elif col_upper == 'MATERNO':
-                                        mapeo_columnas[col] = 'Materno'
+                                        mapeo_columnas[col] = 'MATERNO'
                                     elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
-                                        mapeo_columnas[col] = 'Nombre'
+                                        mapeo_columnas[col] = 'NOMBRE'
                                     elif col_upper == 'CURSO':
                                         mapeo_columnas[col] = 'CURSO'
                                     elif col_upper == 'GRADO':
-                                        mapeo_columnas[col] = 'Grado'
+                                        mapeo_columnas[col] = 'GRADO'
                                     elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
-                                        mapeo_columnas[col] = 'Sección'
+                                        mapeo_columnas[col] = 'SECCIÓN'
                                     elif col_upper == 'NOTA VIGESIMAL 25%':
-                                        mapeo_columnas[col] = 'Nota Lab'
+                                        mapeo_columnas[col] = 'NOTA LABORATORIO'
                                 
                                 df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
                                 
@@ -3158,10 +3223,10 @@ with tab1:
                                 
                                 # Agregar columnas nuevas para certificado
                                 nuevas_columnas = [
-                                    'LISTA DE ASISTENCIA', 'P1 4 PUNTOS', 
-                                    'P2 4 PUNTOS', 'P3 4 PUNTOS', 'P4 4 PUNTOS', 'P5 4 PUNTOS',
-                                    'NOTA de Examen Cibertec', 'NOTA FINAL', 
-                                    'OBSERVACIÓN SOBRE NOTA DESAPROBATORIA', 'STATUS', 'Numeración'
+                                    '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                    'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
+                                    'NOTA EVALUADOR', 'NOTA FINAL', 
+                                    'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
                                 ]
                                 for col in nuevas_columnas:
                                     if col not in df_4p5s_ok.columns:
@@ -3169,17 +3234,17 @@ with tab1:
                                 
                                 # Reordenar columnas
                                 columnas_certificado = [
-                                    'Nro', 'Paterno', 'Materno', 'Nombre', 'Grado', 'Sección', 'CURSO', 
-                                    'Nota Lab', 'LISTA DE ASISTENCIA', 'P1 4 PUNTOS', 
-                                    'P2 4 PUNTOS', 'P3 4 PUNTOS', 'P4 4 PUNTOS', 'P5 4 PUNTOS', 'NOTA de Examen Cibertec', 
-                                    'NOTA FINAL', 'OBSERVACIÓN SOBRE NOTA DESAPROBATORIA', 'STATUS', 'Numeración'
+                                    'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
+                                    'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                    'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 
+                                    'NOTA FINAL', 'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
                                 ]
                                 columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
                                 df_4p5s_ok = df_4p5s_ok[columnas_existentes]
                                 
                                 # Regenerar Nro secuencial
-                                if 'Nro' in df_4p5s_ok.columns:
-                                    df_4p5s_ok['Nro'] = range(1, len(df_4p5s_ok) + 1)
+                                if 'NRO.' in df_4p5s_ok.columns:
+                                    df_4p5s_ok['NRO.'] = range(1, len(df_4p5s_ok) + 1)
                             
                             # Tres columnas para botones 4P-5S
                             col_1p3p_0, col_4p5s_1, col_4p5s_2, col_4p5s_3 = st.columns(4)
