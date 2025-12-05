@@ -3657,12 +3657,19 @@ with tab2:
     ]
     
     # Función auxiliar para leer archivos certificado
-    def leer_archivo_certificado(archivo_bytes, nombre_hoja=None):
+    def leer_archivo_certificado(archivo_bytes, nombre_hoja=None, es_ok_evaluador=False):
         """
         Lee un archivo certificado Excel y retorna DataFrame validado.
+        Retorna las FILAS COMPLETAS que tienen errores (sin detallar cada error).
+        
+        Args:
+            archivo_bytes: bytes del archivo Excel
+            nombre_hoja: nombre de la hoja a leer
+            es_ok_evaluador: True si es archivo OK_EVALUADOR (valida campos vacíos), 
+                           False si es archivo OK (permite campos vacíos)
         
         Returns:
-            tuple: (df, error, fila_cabecera, hojas, df_errores_estructura, df_errores_validacion)
+            tuple: (df, error, fila_cabecera, hojas, df_filas_con_errores)
         """
         try:
             wb = load_workbook(BytesIO(archivo_bytes), data_only=True)
@@ -3671,7 +3678,7 @@ with tab2:
                 nombre_hoja = wb.sheetnames[0]
             
             if nombre_hoja not in wb.sheetnames:
-                return None, f"La hoja '{nombre_hoja}' no existe", None, None, None, None
+                return None, f"La hoja '{nombre_hoja}' no existe", None, None, None
             
             ws = wb[nombre_hoja]
             
@@ -3691,7 +3698,7 @@ with tab2:
                     break
             
             if fila_cabecera is None:
-                return None, "No se detectó la cabecera del formato certificado", None, None, None, None
+                return None, "No se detectó la cabecera del formato certificado", None, None, None
             
             # Usar fila como cabecera
             df.columns = df.iloc[fila_cabecera]
@@ -3709,20 +3716,23 @@ with tab2:
                     columnas_faltantes.append(col_req)
             
             if columnas_faltantes:
-                return None, f"Columnas faltantes: {', '.join(columnas_faltantes)}", None, None, None, None
+                return None, f"Columnas faltantes: {', '.join(columnas_faltantes)}", None, None, None
             
             # Limpiar filas vacías
             df = df.dropna(how='all')
             df = df[df[['PATERNO', 'MATERNO', 'NOMBRE']].notna().all(axis=1)]
             
             if df.empty:
-                return None, "No hay datos válidos en el archivo", None, None, None, None
+                return None, "No hay datos válidos en el archivo", None, None, None
             
-            # VALIDACIÓN 1: Valores numéricos en columnas de notas
+            # ============================================================
+            # VALIDACIÓN SIMPLIFICADA: Identificar filas con errores
+            # ============================================================
             columnas_numericas = ['NOTA LABORATORIO', 'P1 4PTOS.', 'P2 4PTOS.', 'P3 4PTOS.',
                                  'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 'NOTA FINAL']
             
-            errores_validacion = []
+            filas_con_errores_indices = set()  # Set para guardar índices de filas con errores
+            errores_por_fila = {}  # Dict para guardar tipos de errores por fila
             
             for col in columnas_numericas:
                 if col not in df.columns:
@@ -3730,112 +3740,120 @@ with tab2:
                 
                 for idx, valor in df[col].items():
                     valor_str = str(valor).strip().upper()
+                    es_vacio = valor_str in ["", "NAN", "NONE", "NAT", "NULL"] or pd.isna(valor)
                     
-                    # Permitir vacíos solo en columnas específicas según archivo
-                    if valor_str in ["", "NAN", "NONE"]:
+                    # Inicializar dict para esta fila si no existe
+                    if idx not in errores_por_fila:
+                        errores_por_fila[idx] = {
+                            'NOTA_EVALUADOR_VACIA': False,
+                            'NOTA_FINAL_VACIA': False,
+                            'VALOR_NEGATIVO': False,
+                            'VALOR_MAYOR_20': False,
+                            'P1_P5_MAYOR_4': False,
+                            'VALOR_NO_NUMERICO': False
+                        }
+                    
+                    # Validar campos vacíos en NOTA EVALUADOR y NOTA FINAL
+                    # SOLO si es archivo OK_EVALUADOR (debe tener estos campos completos)
+                    if es_ok_evaluador:
+                        if col == 'NOTA EVALUADOR' and es_vacio:
+                            filas_con_errores_indices.add(idx)
+                            errores_por_fila[idx]['NOTA_EVALUADOR_VACIA'] = True
+                            continue
+                        
+                        if col == 'NOTA FINAL' and es_vacio:
+                            filas_con_errores_indices.add(idx)
+                            errores_por_fila[idx]['NOTA_FINAL_VACIA'] = True
+                            continue
+                    
+                    # Para archivo OK o columnas opcionales, saltar valores vacíos
+                    if es_vacio:
                         continue
                     
                     # Validar que sea numérico
                     try:
                         valor_num = float(valor_str)
                         
-                        # No negativos
+                        # Validar negativos
                         if valor_num < 0:
-                            errores_validacion.append({
-                                "fila": idx + 2,
-                                "columna": col,
-                                "valor": valor_str,
-                                "error": "Valor negativo no permitido",
-                                "paterno": str(df.loc[idx, "PATERNO"]),
-                                "materno": str(df.loc[idx, "MATERNO"]),
-                                "nombre": str(df.loc[idx, "NOMBRE"])
-                            })
+                            filas_con_errores_indices.add(idx)
+                            errores_por_fila[idx]['VALOR_NEGATIVO'] = True
                         
-                        # No mayor a 20
-                        elif valor_num > 20:
-                            errores_validacion.append({
-                                "fila": idx + 2,
-                                "columna": col,
-                                "valor": valor_str,
-                                "error": "Valor mayor a 20 no permitido",
-                                "paterno": str(df.loc[idx, "PATERNO"]),
-                                "materno": str(df.loc[idx, "MATERNO"]),
-                                "nombre": str(df.loc[idx, "NOMBRE"])
-                            })
+                        # Validar mayor a 20
+                        if valor_num > 20:
+                            filas_con_errores_indices.add(idx)
+                            errores_por_fila[idx]['VALOR_MAYOR_20'] = True
                         
                         # Validar límite de 4 puntos en P1-P5
-                        elif col.startswith('P') and col.endswith('4PTOS.') and valor_num > 4:
-                            errores_validacion.append({
-                                "fila": idx + 2,
-                                "columna": col,
-                                "valor": valor_str,
-                                "error": "Máximo 4 puntos permitidos",
-                                "paterno": str(df.loc[idx, "PATERNO"]),
-                                "materno": str(df.loc[idx, "MATERNO"]),
-                                "nombre": str(df.loc[idx, "NOMBRE"])
-                            })
+                        if col.startswith('P') and col.endswith('4PTOS.') and valor_num > 4:
+                            filas_con_errores_indices.add(idx)
+                            errores_por_fila[idx]['P1_P5_MAYOR_4'] = True
                             
                     except ValueError:
-                        errores_validacion.append({
-                            "fila": idx + 2,
-                            "columna": col,
-                            "valor": valor_str,
-                            "error": "Valor no numérico",
-                            "paterno": str(df.loc[idx, "PATERNO"]),
-                            "materno": str(df.loc[idx, "MATERNO"]),
-                            "nombre": str(df.loc[idx, "NOMBRE"])
-                        })
+                        # Valor no numérico
+                        filas_con_errores_indices.add(idx)
+                        errores_por_fila[idx]['VALOR_NO_NUMERICO'] = True
             
-            if errores_validacion:
-                df_errores = pd.DataFrame(errores_validacion)
-                df_errores['nombre_completo'] = (df_errores['paterno'] + ' ' + 
-                                                 df_errores['materno'] + ', ' + 
-                                                 df_errores['nombre'])
-                df_errores_display = df_errores[['fila', 'nombre_completo', 'columna', 'valor', 'error']].copy()
-                df_errores_display.columns = ['FILA', 'NOMBRE COMPLETO', 'COLUMNA', 'VALOR', 'TIPO DE ERROR']
-                return None, None, None, None, None, df_errores_display
+            # Si hay filas con errores, retornar esas filas completas con columnas de tipo de error
+            if filas_con_errores_indices:
+                df_filas_con_errores = df.loc[list(filas_con_errores_indices)].copy()
+                
+                # Agregar columnas de tipo de error
+                for idx in df_filas_con_errores.index:
+                    df_filas_con_errores.loc[idx, 'ERROR: NOTA EVALUADOR VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_EVALUADOR_VACIA', False) else ''
+                    df_filas_con_errores.loc[idx, 'ERROR: NOTA FINAL VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_FINAL_VACIA', False) else ''
+                    df_filas_con_errores.loc[idx, 'ERROR: VALOR NEGATIVO'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('VALOR_NEGATIVO', False) else ''
+                    df_filas_con_errores.loc[idx, 'ERROR: VALOR MAYOR A 20'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('VALOR_MAYOR_20', False) else ''
+                    df_filas_con_errores.loc[idx, 'ERROR: P1-P5 MAYOR A 4'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('P1_P5_MAYOR_4', False) else ''
+                    df_filas_con_errores.loc[idx, 'ERROR: VALOR NO NUMÉRICO'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('VALOR_NO_NUMERICO', False) else ''
+                
+                # Ordenar por índice para mantener el orden original
+                df_filas_con_errores = df_filas_con_errores.sort_index()
+                return None, None, fila_cabecera, wb.sheetnames, df_filas_con_errores
             
-            return df, None, fila_cabecera, wb.sheetnames, None, None
+            return df, None, fila_cabecera, wb.sheetnames, None
             
         except Exception as e:
-            return None, f"Error al leer archivo: {str(e)}", None, None, None, None
+            return None, f"Error al leer archivo: {str(e)}", None, None, None
     
-    # Función de comparación actualizada
+    # Función de comparación simplificada
     def comparar_certificados(df_base, df_revisar):
         """
         Compara dos archivos certificados.
-        Genera reporte COMPLETO de TODOS los errores encontrados.
+        Retorna DataFrame con las FILAS COMPLETAS que tienen errores.
         
         Returns:
-            list: Lista de diccionarios con todos los errores
+            DataFrame con filas que tienen errores o None si no hay errores
         """
-        errores = []
-        
         # Normalizar columnas
         df_base.columns = df_base.columns.str.strip().str.upper()
         df_revisar.columns = df_revisar.columns.str.strip().str.upper()
         
+        filas_con_errores_indices = set()
+        errores_por_fila = {}  # Dict para guardar tipos de errores por fila
+        
         # 1. Verificar mismo número de filas
         if len(df_base) != len(df_revisar):
-            errores.append({
-                "tipo": "error_estructura",
-                "categoria": "ESTRUCTURA",
-                "descripcion": "Diferente número de filas",
-                "fila": None,
-                "paterno": None,
-                "materno": None,
-                "nombre": None,
-                "columna": None,
-                "valor_base": f"{len(df_base)} filas",
-                "valor_revisar": f"{len(df_revisar)} filas",
-                "detalle": "Los archivos deben tener la misma cantidad de alumnos"
-            })
-            return errores  # Error crítico, no continuar
+            st.error(f"❌ Los archivos tienen diferente número de filas: BASE={len(df_base)}, REVISAR={len(df_revisar)}")
+            return None
         
-        # 2. Comparar datos de identificación (deben ser idénticos)
+        # 2. Comparar datos de identificación
         columnas_identidad = ['PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 'NOTA LABORATORIO']
         
         for idx in range(len(df_base)):
+            if idx not in errores_por_fila:
+                errores_por_fila[idx] = {
+                    'NOMBRES_NO_COINCIDEN': False,
+                    'GRADO_NO_COINCIDE': False,
+                    'SECCION_NO_COINCIDE': False,
+                    'CURSO_NO_COINCIDE': False,
+                    'NOTA_LAB_NO_COINCIDE': False,
+                    'NOTA_EVALUADOR_VACIA': False,
+                    'NOTA_FINAL_VACIA': False,
+                    'ERROR_SUMA_P1_P5': False,
+                    'ERROR_CALCULO_NOTA_FINAL': False
+                }
+            
             for col in columnas_identidad:
                 if col not in df_base.columns or col not in df_revisar.columns:
                     continue
@@ -3850,62 +3868,93 @@ with tab2:
                     val_revisar = ""
                 
                 if val_base != val_revisar:
-                    errores.append({
-                        "tipo": "diferencia_identidad",
-                        "categoria": "DATOS DE IDENTIDAD DIFERENTES",
-                        "fila": idx + 2,
-                        "paterno": str(df_base.loc[idx, 'PATERNO']) if 'PATERNO' in df_base.columns else "",
-                        "materno": str(df_base.loc[idx, 'MATERNO']) if 'MATERNO' in df_base.columns else "",
-                        "nombre": str(df_base.loc[idx, 'NOMBRE']) if 'NOMBRE' in df_base.columns else "",
-                        "columna": col,
-                        "descripcion": f"'{col}' no coincide entre archivos",
-                        "valor_base": val_base if val_base else "(vacío)",
-                        "valor_revisar": val_revisar if val_revisar else "(vacío)",
-                        "detalle": "Esta columna debe ser idéntica en ambos archivos"
-                    })
+                    filas_con_errores_indices.add(idx)
+                    
+                    # Marcar el tipo específico de error
+                    if col in ['PATERNO', 'MATERNO', 'NOMBRE']:
+                        errores_por_fila[idx]['NOMBRES_NO_COINCIDEN'] = True
+                    elif col == 'GRADO':
+                        errores_por_fila[idx]['GRADO_NO_COINCIDE'] = True
+                    elif col == 'SECCIÓN':
+                        errores_por_fila[idx]['SECCION_NO_COINCIDE'] = True
+                    elif col == 'CURSO':
+                        errores_por_fila[idx]['CURSO_NO_COINCIDE'] = True
+                    elif col == 'NOTA LABORATORIO':
+                        errores_por_fila[idx]['NOTA_LAB_NO_COINCIDE'] = True
         
-        # Si hay errores de identidad, no continuar con validaciones matemáticas
-        if any(e['tipo'] == 'diferencia_identidad' for e in errores):
-            return errores
+        # Si hay errores de identidad, retornar ahora
+        if filas_con_errores_indices:
+            df_errores = df_revisar.loc[list(filas_con_errores_indices)].copy()
+            
+            # Agregar columnas de tipo de error ESPECÍFICAS
+            for idx in df_errores.index:
+                df_errores.loc[idx, 'ERROR: NOMBRES NO COINCIDEN'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOMBRES_NO_COINCIDEN', False) else ''
+                df_errores.loc[idx, 'ERROR: GRADO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('GRADO_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: SECCIÓN NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('SECCION_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: CURSO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('CURSO_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA LAB NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_LAB_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA EVALUADOR VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_EVALUADOR_VACIA', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA FINAL VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_FINAL_VACIA', False) else ''
+                df_errores.loc[idx, 'ERROR: SUMA P1-P5'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('ERROR_SUMA_P1_P5', False) else ''
+                df_errores.loc[idx, 'ERROR: CÁLCULO NOTA FINAL'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('ERROR_CALCULO_NOTA_FINAL', False) else ''
+            
+            df_errores = df_errores.sort_index()
+            return df_errores
         
-        # 3. Validar campos completos en A REVISAR
+        # 3. Validar campos completos en OK_EVALUADOR
         for idx in range(len(df_revisar)):
+            if idx not in errores_por_fila:
+                errores_por_fila[idx] = {
+                    'NOMBRES_NO_COINCIDEN': False,
+                    'GRADO_NO_COINCIDE': False,
+                    'SECCION_NO_COINCIDE': False,
+                    'CURSO_NO_COINCIDE': False,
+                    'NOTA_LAB_NO_COINCIDE': False,
+                    'NOTA_EVALUADOR_VACIA': False,
+                    'NOTA_FINAL_VACIA': False,
+                    'ERROR_SUMA_P1_P5': False,
+                    'ERROR_CALCULO_NOTA_FINAL': False
+                }
+            
             # NOTA EVALUADOR debe estar completa
             val_evaluador = str(df_revisar.loc[idx, 'NOTA EVALUADOR']).strip().upper()
-            if val_evaluador in ["", "NAN", "NONE"]:
-                errores.append({
-                    "tipo": "campo_vacio_revisar",
-                    "categoria": "CAMPO VACÍO EN A REVISAR",
-                    "fila": idx + 2,
-                    "paterno": str(df_revisar.loc[idx, 'PATERNO']),
-                    "materno": str(df_revisar.loc[idx, 'MATERNO']),
-                    "nombre": str(df_revisar.loc[idx, 'NOMBRE']),
-                    "columna": "NOTA EVALUADOR",
-                    "descripcion": "Campo 'NOTA EVALUADOR' vacío",
-                    "valor_base": str(df_base.loc[idx, 'NOTA EVALUADOR']) if idx < len(df_base) else "N/A",
-                    "valor_revisar": "(vacío)",
-                    "detalle": "Este campo debe estar completo en archivo A REVISAR"
-                })
+            es_vacio_evaluador = (
+                val_evaluador in ["", "NAN", "NONE", "NAT", "NULL"] or 
+                pd.isna(df_revisar.loc[idx, 'NOTA EVALUADOR']) or
+                val_evaluador.replace(" ", "") == ""
+            )
+            
+            if es_vacio_evaluador:
+                filas_con_errores_indices.add(idx)
+                errores_por_fila[idx]['NOTA_EVALUADOR_VACIA'] = True
             
             # NOTA FINAL debe estar completa
             val_final = str(df_revisar.loc[idx, 'NOTA FINAL']).strip().upper()
-            if val_final in ["", "NAN", "NONE"]:
-                errores.append({
-                    "tipo": "campo_vacio_revisar",
-                    "categoria": "CAMPO VACÍO EN A REVISAR",
-                    "fila": idx + 2,
-                    "paterno": str(df_revisar.loc[idx, 'PATERNO']),
-                    "materno": str(df_revisar.loc[idx, 'MATERNO']),
-                    "nombre": str(df_revisar.loc[idx, 'NOMBRE']),
-                    "columna": "NOTA FINAL",
-                    "descripcion": "Campo 'NOTA FINAL' vacío",
-                    "valor_base": str(df_base.loc[idx, 'NOTA FINAL']) if idx < len(df_base) else "N/A",
-                    "valor_revisar": "(vacío)",
-                    "detalle": "Este campo debe estar completo en archivo A REVISAR"
-                })
+            es_vacio_final = (
+                val_final in ["", "NAN", "NONE", "NAT", "NULL"] or 
+                pd.isna(df_revisar.loc[idx, 'NOTA FINAL']) or
+                val_final.replace(" ", "") == ""
+            )
+            
+            if es_vacio_final:
+                filas_con_errores_indices.add(idx)
+                errores_por_fila[idx]['NOTA_FINAL_VACIA'] = True
         
-        # 4. Validaciones matemáticas en A REVISAR
+        # 4. Validaciones matemáticas
         for idx in range(len(df_revisar)):
+            if idx not in errores_por_fila:
+                errores_por_fila[idx] = {
+                    'NOMBRES_NO_COINCIDEN': False,
+                    'GRADO_NO_COINCIDE': False,
+                    'SECCION_NO_COINCIDE': False,
+                    'CURSO_NO_COINCIDE': False,
+                    'NOTA_LAB_NO_COINCIDE': False,
+                    'NOTA_EVALUADOR_VACIA': False,
+                    'NOTA_FINAL_VACIA': False,
+                    'ERROR_SUMA_P1_P5': False,
+                    'ERROR_CALCULO_NOTA_FINAL': False
+                }
+            
             try:
                 # Obtener valores numéricos
                 p1 = pd.to_numeric(df_revisar.loc[idx, 'P1 4PTOS.'], errors='coerce')
@@ -3929,59 +3978,46 @@ with tab2:
                     suma_esperada = p1 + p2 + p3 + p4 + p5
                     diferencia = abs(nota_evaluador - suma_esperada)
                     
-                    if diferencia > 0.01:  # Tolerancia de 0.01 por redondeos
-                        errores.append({
-                            "tipo": "error_calculo_evaluador",
-                            "categoria": "ERROR EN CÁLCULO DE NOTA EVALUADOR",
-                            "fila": idx + 2,
-                            "paterno": str(df_revisar.loc[idx, 'PATERNO']),
-                            "materno": str(df_revisar.loc[idx, 'MATERNO']),
-                            "nombre": str(df_revisar.loc[idx, 'NOMBRE']),
-                            "columna": "NOTA EVALUADOR",
-                            "descripcion": f"NOTA EVALUADOR debe ser P1+P2+P3+P4+P5",
-                            "valor_base": f"Suma esperada: {suma_esperada:.2f}",
-                            "valor_revisar": f"Valor actual: {nota_evaluador:.2f}",
-                            "detalle": f"P1={p1}, P2={p2}, P3={p3}, P4={p4}, P5={p5}"
-                        })
+                    if diferencia > 0.01:
+                        filas_con_errores_indices.add(idx)
+                        errores_por_fila[idx]['ERROR_SUMA_P1_P5'] = True
                 
                 # VALIDACIÓN: NOTA FINAL = (NOTA LAB * 0.25) + (NOTA EVAL * 0.75)
                 if not pd.isna(nota_final) and not pd.isna(nota_lab) and not pd.isna(nota_evaluador):
                     nota_final_esperada = (nota_lab * 0.25) + (nota_evaluador * 0.75)
                     diferencia = abs(nota_final - nota_final_esperada)
                     
-                    if diferencia > 0.01:  # Tolerancia de 0.01 por redondeos
-                        errores.append({
-                            "tipo": "error_calculo_final",
-                            "categoria": "ERROR EN CÁLCULO DE NOTA FINAL",
-                            "fila": idx + 2,
-                            "paterno": str(df_revisar.loc[idx, 'PATERNO']),
-                            "materno": str(df_revisar.loc[idx, 'MATERNO']),
-                            "nombre": str(df_revisar.loc[idx, 'NOMBRE']),
-                            "columna": "NOTA FINAL",
-                            "descripcion": "NOTA FINAL debe ser (NOTA LAB * 0.25) + (NOTA EVAL * 0.75)",
-                            "valor_base": f"Esperado: {nota_final_esperada:.2f}",
-                            "valor_revisar": f"Actual: {nota_final:.2f}",
-                            "detalle": f"Lab={nota_lab}, Eval={nota_evaluador}"
-                        })
+                    if diferencia > 0.01:
+                        filas_con_errores_indices.add(idx)
+                        errores_por_fila[idx]['ERROR_CALCULO_NOTA_FINAL'] = True
                         
             except Exception as e:
-                errores.append({
-                    "tipo": "error_procesamiento",
-                    "categoria": "ERROR AL PROCESAR FILA",
-                    "fila": idx + 2,
-                    "paterno": str(df_revisar.loc[idx, 'PATERNO']) if 'PATERNO' in df_revisar.columns else "",
-                    "materno": str(df_revisar.loc[idx, 'MATERNO']) if 'MATERNO' in df_revisar.columns else "",
-                    "nombre": str(df_revisar.loc[idx, 'NOMBRE']) if 'NOMBRE' in df_revisar.columns else "",
-                    "columna": "VARIAS",
-                    "descripcion": f"Error al procesar: {str(e)}",
-                    "valor_base": None,
-                    "valor_revisar": None,
-                    "detalle": None
-                })
+                filas_con_errores_indices.add(idx)
         
-        return errores
+        # Retornar filas con errores
+        if filas_con_errores_indices:
+            df_errores = df_revisar.loc[list(filas_con_errores_indices)].copy()
+            
+            # Agregar columnas de tipo de error ESPECÍFICAS
+            for idx in df_errores.index:
+                df_errores.loc[idx, 'ERROR: NOMBRES NO COINCIDEN'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOMBRES_NO_COINCIDEN', False) else ''
+                df_errores.loc[idx, 'ERROR: GRADO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('GRADO_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: SECCIÓN NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('SECCION_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: CURSO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('CURSO_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA LAB NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_LAB_NO_COINCIDE', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA EVALUADOR VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_EVALUADOR_VACIA', False) else ''
+                df_errores.loc[idx, 'ERROR: NOTA FINAL VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_FINAL_VACIA', False) else ''
+                df_errores.loc[idx, 'ERROR: SUMA P1-P5'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('ERROR_SUMA_P1_P5', False) else ''
+                df_errores.loc[idx, 'ERROR: CÁLCULO NOTA FINAL'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('ERROR_CALCULO_NOTA_FINAL', False) else ''
+            
+            df_errores = df_errores.sort_index()
+            return df_errores
+        
+        return None
     
+    # ============================================================
     # INTERFAZ DE USUARIO
+    # ============================================================
     col_izq, col_der = st.columns(2)
     
     # COLUMNA IZQUIERDA: Archivo Base
@@ -4010,27 +4046,37 @@ with tab2:
             )
             
             if st.button("✅ Cargar Archivo OK", key="btn_cargar_base_cert"):
-                df_base, error_base, fila_cab_base, _, df_err_est, df_err_val = leer_archivo_certificado(
+                df_base, error_base, fila_cab_base, _, df_err = leer_archivo_certificado(
                     archivo_base_bytes,
-                    hoja_base_seleccionada
+                    hoja_base_seleccionada,
+                    es_ok_evaluador=False  # Archivo OK permite campos vacíos
                 )
                 
                 if error_base:
                     st.error(f"❌ {error_base}")
-                elif df_err_val is not None:
-                    st.error(f"❌ Se encontraron {len(df_err_val)} errores de validación")
-                    st.dataframe(df_err_val, use_container_width=True, hide_index=True)
+                elif df_err is not None:
+                    st.error(f"❌ Se encontraron {len(df_err)} filas con errores de validación")
+                    st.dataframe(df_err, use_container_width=True, hide_index=True)
                 else:
                     st.session_state.comparador_archivo_base = {
                         'df': df_base,
                         'nombre_hoja': hoja_base_seleccionada,
                         'fila_cabecera': fila_cab_base
                     }
+                    # Limpiar resultados al cargar nuevo archivo
+                    st.session_state.comparador_resultados = None
+                    st.session_state.comparador_comparacion_realizada = False
                     st.success(f"✅ Archivo OK cargado ({len(df_base)} registros)")
             
             if st.session_state.comparador_archivo_base:
                 with st.expander("Vista previa - OK", expanded=False):
                     st.dataframe(st.session_state.comparador_archivo_base['df'].head(10), hide_index=True)
+        else:
+            # Si no hay archivo, limpiar datos cargados y resultados
+            if st.session_state.comparador_archivo_base is not None:
+                st.session_state.comparador_archivo_base = None
+                st.session_state.comparador_resultados = None
+                st.session_state.comparador_comparacion_realizada = False
     
     # COLUMNA DERECHA: Archivo a Revisar
     with col_der:
@@ -4056,17 +4102,29 @@ with tab2:
                 key="selector_hoja_revisar_cert"
             )
             
-            if st.button("✅ Cargar Archivo OK_EVALUADORR", key="btn_cargar_revisar_cert"):
-                df_revisar, error_revisar, fila_cab_revisar, _, df_err_est, df_err_val = leer_archivo_certificado(
+            if st.button("✅ Cargar Archivo OK_EVALUADOR", key="btn_cargar_revisar_cert"):
+                df_revisar, error_revisar, fila_cab_revisar, _, df_err = leer_archivo_certificado(
                     archivo_revisar_bytes,
-                    hoja_revisar_seleccionada
+                    hoja_revisar_seleccionada,
+                    es_ok_evaluador=True  # Archivo OK_EVALUADOR requiere campos completos
                 )
                 
                 if error_revisar:
                     st.error(f"❌ {error_revisar}")
-                elif df_err_val is not None:
-                    st.error(f"❌ Se encontraron {len(df_err_val)} errores de validación")
-                    st.dataframe(df_err_val, use_container_width=True, hide_index=True)
+                elif df_err is not None:
+                    st.error(f"❌ Se encontraron {len(df_err)} filas con errores de validación")
+                    st.dataframe(df_err, use_container_width=True, hide_index=True)
+                    
+                    # Botón de descarga para filas con errores
+                    st.divider()
+                    csv = df_err.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📥 Descargar filas con errores (CSV)",
+                        data=csv,
+                        file_name="filas_con_errores.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
                 else:
                     st.session_state.comparador_archivo_revisar = {
                         'df': df_revisar,
@@ -4074,11 +4132,20 @@ with tab2:
                         'fila_cabecera': fila_cab_revisar,
                         'bytes': archivo_revisar_bytes
                     }
+                    # Limpiar resultados al cargar nuevo archivo
+                    st.session_state.comparador_resultados = None
+                    st.session_state.comparador_comparacion_realizada = False
                     st.success(f"✅ Archivo OK_EVALUADOR cargado ({len(df_revisar)} registros)")
             
             if st.session_state.comparador_archivo_revisar:
                 with st.expander("Vista previa - OK_EVALUADOR", expanded=False):
                     st.dataframe(st.session_state.comparador_archivo_revisar['df'].head(10), hide_index=True)
+        else:
+            # Si no hay archivo, limpiar datos cargados y resultados
+            if st.session_state.comparador_archivo_revisar is not None:
+                st.session_state.comparador_archivo_revisar = None
+                st.session_state.comparador_resultados = None
+                st.session_state.comparador_comparacion_realizada = False
     
     # SECCIÓN DE COMPARACIÓN
     st.divider()
@@ -4089,86 +4156,31 @@ with tab2:
         with col_comp2:
             if st.button("🔍 COMPARAR ARCHIVOS", type="primary", use_container_width=True):
                 with st.spinner("Comparando archivos y validando cálculos..."):
-                    errores = comparar_certificados(
+                    df_errores = comparar_certificados(
                         st.session_state.comparador_archivo_base['df'].copy(),
                         st.session_state.comparador_archivo_revisar['df'].copy()
                     )
-                    st.session_state.comparador_resultados = errores
+                    st.session_state.comparador_resultados = df_errores
+                    # Marcar que se realizó la comparación
+                    st.session_state.comparador_comparacion_realizada = True
         
         # MOSTRAR RESULTADOS
         if st.session_state.comparador_resultados is not None:
             st.divider()
             
-            if len(st.session_state.comparador_resultados) == 0:
-                st.success("🎉 **¡VALIDACIÓN EXITOSA!**")
-                st.success("✅ Todos los datos y cálculos son correctos")
-                st.balloons()
-                
-                # GENERAR ARCHIVO OK_EVALUADOR
-                df_final = st.session_state.comparador_archivo_revisar['df'].copy()
-                
-                # Calcular ESTATUS
-                if "ESTATUS" in df_final.columns and "NOTA FINAL" in df_final.columns:
-                    nota_final = pd.to_numeric(df_final["NOTA FINAL"], errors="coerce")
-                    df_final["ESTATUS"] = nota_final.apply(
-                        lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
-                    )
-                
-                # Generar archivo para descarga
-                st.divider()
-                st.markdown("### 📥 Descargar Archivo Final")
-                
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_final.to_excel(writer, index=False, sheet_name='OK_EVALUADOR')
-                
-                excel_data = output.getvalue()
-                
-                col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
-                with col_desc2:
-                    st.download_button(
-                        label="📥 Descargar OK_EVALUADOR.xlsx",
-                        data=excel_data,
-                        file_name="OK_EVALUADOR.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-            
-            else:
+            # Verificar si es un DataFrame (hay errores) o None (no hay errores)
+            if isinstance(st.session_state.comparador_resultados, pd.DataFrame) and len(st.session_state.comparador_resultados) > 0:
+                # Hay errores
+                df_errores = st.session_state.comparador_resultados
                 st.error("❌ **SE ENCONTRARON ERRORES**")
-                st.warning(f"⚠️ Total de problemas: **{len(st.session_state.comparador_resultados)}**")
+                st.warning(f"⚠️ Total de filas con errores: **{len(df_errores)}**")
                 
-                # Agrupar errores por categoría
-                df_errores = pd.DataFrame(st.session_state.comparador_resultados)
+                st.markdown("### 📋 Filas Completas con Errores")
+                st.caption("Estas son las filas que presentan uno o más errores. Revisa cada valor.")
                 
-                # Mostrar resumen por categoría
-                st.markdown("### 📊 Resumen de Errores por Categoría")
-                resumen = df_errores.groupby('categoria').size().reset_index(name='cantidad')
-                resumen = resumen.sort_values('cantidad', ascending=False)
-                
-                col_res1, col_res2 = st.columns([1, 2])
-                with col_res1:
-                    st.dataframe(resumen, hide_index=True, use_container_width=True)
-                with col_res2:
-                    st.bar_chart(resumen.set_index('categoria'))
-                
-                st.divider()
-                
-                # Tabla completa de errores
-                st.markdown("### 📋 Detalle Completo de Errores")
-                
-                # Preparar DataFrame para visualización
-                columnas_mostrar = ['fila', 'categoria', 'paterno', 'materno', 'nombre', 
-                                   'columna', 'descripcion', 'valor_base', 'valor_revisar', 'detalle']
-                columnas_disponibles = [col for col in columnas_mostrar if col in df_errores.columns]
-                df_errores_display = df_errores[columnas_disponibles].copy()
-                
-                # Renombrar para mejor presentación
-                df_errores_display.columns = [col.upper().replace('_', ' ') for col in df_errores_display.columns]
-                
-                # Mostrar tabla con scroll
+                # Mostrar tabla con todas las columnas
                 st.dataframe(
-                    df_errores_display,
+                    df_errores,
                     use_container_width=True,
                     height=400
                 )
@@ -4177,15 +4189,75 @@ with tab2:
                 st.divider()
                 col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
                 with col_desc2:
-                    csv = df_errores_display.to_csv(index=False).encode('utf-8-sig')
+                    csv = df_errores.to_csv(index=False).encode('utf-8-sig')
                     st.download_button(
-                        label="📥 Descargar Reporte Completo (CSV)",
+                        label="📥 Descargar Filas con Errores (CSV)",
                         data=csv,
-                        file_name="reporte_errores_completo.csv",
+                        file_name="filas_con_errores_completas.csv",
                         mime="text/csv",
                         use_container_width=True
                     )
-    
+        
+        # Mostrar resultado exitoso SIEMPRE después de comparar (aunque sea None)
+        elif st.session_state.get('comparador_comparacion_realizada', False):
+            # No hay errores - VALIDACIÓN EXITOSA
+            st.divider()
+            st.success("🎉 **¡VALIDACIÓN EXITOSA!**")
+            st.success("✅ Todos los datos y cálculos son correctos")
+            st.balloons()
+            
+            # GENERAR ARCHIVO OK_EVALUADOR CON ESTATUS
+            df_final = st.session_state.comparador_archivo_revisar['df'].copy()
+                
+            # Asegurar que existe la columna ESTATUS
+            if "ESTATUS" not in df_final.columns:
+                df_final["ESTATUS"] = ""
+                
+            # Calcular ESTATUS basado en NOTA FINAL
+            if "NOTA FINAL" in df_final.columns:
+                nota_final = pd.to_numeric(df_final["NOTA FINAL"], errors="coerce")
+                df_final["ESTATUS"] = nota_final.apply(
+                    lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
+                )
+                
+                # Mostrar resumen de aprobados/desaprobados
+                total = len(df_final)
+                aprobados = (df_final["ESTATUS"] == "Aprobado").sum()
+                desaprobados = (df_final["ESTATUS"] == "Desaprobado").sum()
+                    
+                st.divider()
+                st.markdown("### 📊 Resumen de Resultados")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total de Estudiantes", total)
+                with col2:
+                    st.metric("✅ Aprobados", aprobados, delta=f"{aprobados/total*100:.1f}%")
+                with col3:
+                    st.metric("❌ Desaprobados", desaprobados, delta=f"{desaprobados/total*100:.1f}%")
+                
+            # Generar archivo Excel para descarga
+            st.divider()
+            st.markdown("### 📥 Descargar Archivo OK_EVALUADOR Completo")
+            st.caption("El archivo incluye la columna ESTATUS completa con Aprobado/Desaprobado")
+                
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                # Obtener nombre de la hoja original
+                nombre_hoja = st.session_state.comparador_archivo_revisar['nombre_hoja']
+                df_final.to_excel(writer, index=False, sheet_name=nombre_hoja)
+                
+            excel_data = output.getvalue()
+                
+            col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
+            with col_desc2:
+                st.download_button(
+                    label="📥 Descargar OK_EVALUADOR.xlsx",
+                    data=excel_data,
+                    file_name="OK_EVALUADOR.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                    )
+                    
     else:
         st.info("👆 Carga ambos archivos para comenzar la comparación")
     
