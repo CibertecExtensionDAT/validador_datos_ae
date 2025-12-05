@@ -117,7 +117,7 @@ COLUMNAS_ARCHIVO2_4P5S = [
 
 COLUMNAS_EVALUADOR = [
     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", 
-    "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
+    "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVADOS"
 ]
 
 #COLUMNAS_ARCHIVO_PDF = [
@@ -642,7 +642,7 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
         indicator=True
     )
     
-    # Crear columna Observaciones basada en el origen
+    # Crear columna OBSERVADOS basada en el origen
     def asignar_observacion(row):
         if row['_merge'] == 'both':  # Aparece en ambos archivos
             return ''
@@ -651,7 +651,7 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
         else:  # 'left_only' - Solo en archivo2
             return 'RET'
     
-    df_evaluador['OBSERVACIONES'] = df_evaluador.apply(asignar_observacion, axis=1)
+    df_evaluador['OBSERVADOS'] = df_evaluador.apply(asignar_observacion, axis=1)
     
     # Eliminar columnas auxiliares
     df_evaluador = df_evaluador.drop(columns=['_merge', '_origen'], errors='ignore')
@@ -708,14 +708,14 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     # Definir columnas finales para 1P-3P (sin NOTAS VIGESIMALES 75% ni PROMEDIO)
     columnas_1p3p = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%", "IDENTIFICADOR", "OBSERVACIONES"
+        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%", "IDENTIFICADOR", "OBSERVADOS"
     ]
     
     # Definir columnas finales para 4P-5S (con NOTAS VIGESIMALES 75% y PROMEDIO)
     columnas_4p5s = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
         "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%", 
-        "NOTAS VIGESIMALES 75%", "PROMEDIO", "IDENTIFICADOR", "OBSERVACIONES"
+        "NOTAS VIGESIMALES 75%", "PROMEDIO", "IDENTIFICADOR", "OBSERVADOS"
     ]
     
     # Asegurar columnas para 1P-3P
@@ -884,7 +884,7 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
         fila_cabecera_excel = fila_cabecera + 1
         fila_inicio_datos = fila_cabecera_excel + 1
         
-        # Actualizar cabecera con las columnas del DataFrame (incluyendo OBSERVACIONES)
+        # Actualizar cabecera con las columnas del DataFrame (incluyendo OBSERVADOS)
         cabecera_actual = []
         ultima_col_con_datos = 0
         for idx, cell in enumerate(ws[fila_cabecera_excel], start=1):
@@ -1260,7 +1260,7 @@ def comparar_evaluadores(df_base, df_revisar):
     Compara dos archivos evaluadores.
     - Ambos deben tener las mismas columnas en el mismo orden
     - Todo debe ser idéntico EXCEPTO la columna "NOTAS VIGESIMALES 75%"
-    - En el archivo BASE: pueden estar vacías "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVACIONES"
+    - En el archivo BASE: pueden estar vacías "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVADOS"
     - En el archivo A REVISAR: "NOTA VIGESIMAL 25%" y "NOTAS VIGESIMALES 75%" deben estar completas
     """
     errores = []
@@ -1340,7 +1340,7 @@ def comparar_evaluadores(df_base, df_revisar):
     
     for col in columnas_comparar:
         # Para estas columnas opcionales, no comparar si están vacías en BASE
-        columnas_opcionales_base = ["NOTA VIGESIMAL 25%", "PROMEDIO", "OBSERVACIONES"]
+        columnas_opcionales_base = ["NOTA VIGESIMAL 25%", "PROMEDIO", "OBSERVADOS"]
         
         for idx in range(min(len(df_base), len(df_revisar))):
             val_base = str(df_base.loc[idx, col]).strip().upper()
@@ -3013,7 +3013,7 @@ with tab1:
                             df_1p3p_actual = df_eval_1p3p_completo.copy()
                             
                             df_1p3p_observados = df_eval_1p3p_completo[
-                                df_eval_1p3p_completo["OBSERVACIONES"].isin(["RET", "SN"])
+                                df_eval_1p3p_completo["OBSERVADOS"].isin(["RET", "SN"])
                             ].copy()
                             if len(df_1p3p_observados) > 0:
                                 df_1p3p_observados = df_1p3p_observados.reset_index(drop=True)
@@ -3022,9 +3022,9 @@ with tab1:
                                 df_1p3p_observados.insert(0, 'NRO.', range(1, len(df_1p3p_observados) + 1))
                             
                             df_1p3p_ok = df_eval_1p3p_completo[
-                                (df_eval_1p3p_completo["OBSERVACIONES"].isna()) | 
-                                (df_eval_1p3p_completo["OBSERVACIONES"] == "") |
-                                (df_eval_1p3p_completo["OBSERVACIONES"].astype(str).str.strip() == "")
+                                (df_eval_1p3p_completo["OBSERVADOS"].isna()) | 
+                                (df_eval_1p3p_completo["OBSERVADOS"] == "") |
+                                (df_eval_1p3p_completo["OBSERVADOS"].astype(str).str.strip() == "")
                             ].copy()
                             if len(df_1p3p_ok) > 0:
                                 df_1p3p_ok = df_1p3p_ok.reset_index(drop=True)
@@ -3139,7 +3139,7 @@ with tab1:
                                     columnas_a_eliminar = []
                                     for col in df_1p3p_ok.columns:
                                         col_upper = col.upper()
-                                        if 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                        if 'OBSERVADOS' in col_upper or 'OBSERVACION' in col_upper:
                                             columnas_a_eliminar.append(col)
                                     
                                     df_1p3p_ok = df_1p3p_ok.drop(columns=columnas_a_eliminar, errors='ignore')
@@ -3149,7 +3149,7 @@ with tab1:
                                         '¿ASISTIÓ?', 'P1 4PTOS.', 
                                         'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
                                         'NOTA EVALUADOR', 'NOTA FINAL', 
-                                        'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                        'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
                                     ]
                                     for col in nuevas_columnas:
                                         if col not in df_1p3p_ok.columns:
@@ -3160,11 +3160,22 @@ with tab1:
                                         'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                                         'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
                                         'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 
-                                        'NOTA FINAL', 'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                        'NOTA FINAL', 'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
                                     ]
                                     columnas_existentes = [col for col in columnas_certificado_1p3p if col in df_1p3p_ok.columns]
                                     df_1p3p_ok = df_1p3p_ok[columnas_existentes]
-                                    
+
+                                    # COPIAR NOTA LABORATORIO en NOTA FINAL
+                                    if "NOTA LABORATORIO" in df_1p3p_ok.columns and "NOTA FINAL" in df_1p3p_ok.columns:
+                                        df_1p3p_ok["NOTA FINAL"] = pd.to_numeric(df_1p3p_ok["NOTA LABORATORIO"], errors="coerce")
+
+                                    # CALCULAR ESTATUS
+                                    if "ESTATUS" in df_1p3p_ok.columns and "NOTA FINAL" in df_1p3p_ok.columns:
+                                        nota_final = pd.to_numeric(df_1p3p_ok["NOTA FINAL"], errors="coerce")
+                                        df_1p3p_ok["ESTATUS"] = nota_final.apply(
+                                            lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
+                                        )
+
                                     # Regenerar Nro secuencial
                                     if 'NRO.' in df_1p3p_ok.columns:
                                         df_1p3p_ok['NRO.'] = range(1, len(df_1p3p_ok) + 1)
@@ -3206,7 +3217,7 @@ with tab1:
                             df_4p5s_actual = df_eval_4p5s_completo.copy()
                             
                             df_4p5s_observados = df_eval_4p5s_completo[
-                                df_eval_4p5s_completo["OBSERVACIONES"].isin(["RET", "SN"])
+                                df_eval_4p5s_completo["OBSERVADOS"].isin(["RET", "SN"])
                             ].copy()
                             if len(df_4p5s_observados) > 0:
                                 df_4p5s_observados = df_4p5s_observados.reset_index(drop=True)
@@ -3215,9 +3226,9 @@ with tab1:
                                 df_4p5s_observados.insert(0, 'NRO.', range(1, len(df_4p5s_observados) + 1))
                             
                             df_4p5s_ok = df_eval_4p5s_completo[
-                                (df_eval_4p5s_completo["OBSERVACIONES"].isna()) | 
-                                (df_eval_4p5s_completo["OBSERVACIONES"] == "") |
-                                (df_eval_4p5s_completo["OBSERVACIONES"].astype(str).str.strip() == "")
+                                (df_eval_4p5s_completo["OBSERVADOS"].isna()) | 
+                                (df_eval_4p5s_completo["OBSERVADOS"] == "") |
+                                (df_eval_4p5s_completo["OBSERVADOS"].astype(str).str.strip() == "")
                             ].copy()
                             
                             if len(df_4p5s_ok) > 0:
@@ -3257,7 +3268,7 @@ with tab1:
                                     col_upper = col.upper()
                                     if 'PROMEDIO' in col_upper:
                                         columnas_a_eliminar.append(col)
-                                    elif 'OBSERVACIONES' in col_upper or 'OBSERVACION' in col_upper:
+                                    elif 'OBSERVADOS' in col_upper or 'OBSERVACION' in col_upper:
                                         columnas_a_eliminar.append(col)
                                 
                                 df_4p5s_ok = df_4p5s_ok.drop(columns=columnas_a_eliminar, errors='ignore')
@@ -3267,7 +3278,7 @@ with tab1:
                                     '¿ASISTIÓ?', 'P1 4PTOS.', 
                                     'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
                                     'NOTA EVALUADOR', 'NOTA FINAL', 
-                                    'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                    'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
                                 ]
                                 for col in nuevas_columnas:
                                     if col not in df_4p5s_ok.columns:
@@ -3278,10 +3289,17 @@ with tab1:
                                     'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                                     'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
                                     'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 
-                                    'NOTA FINAL', 'OBSERVACIONES', 'ESTATUS', 'NUMERACIÓN'
+                                    'NOTA FINAL', 'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
                                 ]
                                 columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
                                 df_4p5s_ok = df_4p5s_ok[columnas_existentes]
+
+                                # CALCULAR ESTATUS
+                                #if "ESTATUS" in df_4p5s_ok.columns and "NOTA FINAL" in df_4p5s_ok.columns:
+                                #    nota_final = pd.to_numeric(df_4p5s_ok["NOTA FINAL"], errors="coerce")
+                                #    df_4p5s_ok["ESTATUS"] = nota_final.apply(
+                                #        lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
+                                #    )
                                 
                                 # Regenerar Nro secuencial
                                 if 'NRO.' in df_4p5s_ok.columns:
@@ -3313,7 +3331,7 @@ with tab1:
                                 # ACTUAL 4P-5S
                                 dict_actual_4p5s = {
                                     "4P-5S": {
-                                        'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                        'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore"),
                                         'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                     }
                                 }
@@ -3336,7 +3354,7 @@ with tab1:
                                 if len(df_4p5s_observados) > 0:
                                     dict_observados_4p5s = {
                                         "4P-5S": {
-                                            'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore"),
                                             'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                         }
                                     }
@@ -3622,7 +3640,7 @@ with tab2:
     st.info("""
     📌 **Instrucciones:**
     - Formato tipo "Archivo_4P-5S_ACTUAL.xlsx"
-    - Sube el archivo **BASE** (puede tener campos vacíos en: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES)
+    - Sube el archivo **BASE** (puede tener campos vacíos en: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVADOS)
     - Sube el archivo **A REVISAR** (debe tener completos: NOTA VIGESIMAL 25% y NOTAS VIGESIMALES 75%)
     - **La única diferencia permitida** es en la columna "NOTAS VIGESIMALES 75%"
     """)
@@ -3632,7 +3650,7 @@ with tab2:
     # COLUMNA IZQUIERDA: Archivo Base
     with col_izq:
         st.markdown("#### 📄 Archivo BASE")
-        st.caption("Campos opcionales: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVACIONES")
+        st.caption("Campos opcionales: NOTA VIGESIMAL 25%, NOTAS VIGESIMALES 75%, PROMEDIO, OBSERVADOS")
         
         archivo_base = st.file_uploader(
             "Selecciona el archivo evaluador BASE",
