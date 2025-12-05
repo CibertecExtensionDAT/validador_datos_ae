@@ -4235,29 +4235,88 @@ with tab2:
                 with col3:
                     st.metric("❌ Desaprobados", desaprobados, delta=f"{desaprobados/total*100:.1f}%")
                 
-            # Generar archivo Excel para descarga
-            st.divider()
-            st.markdown("### 📥 Descargar Archivo OK_EVALUADOR Completo")
-            st.caption("El archivo incluye la columna ESTATUS completa con Aprobado/Desaprobado")
+            ##
+            # Obtener el archivo original en bytes
+            archivo_bytes_original = st.session_state.comparador_archivo_revisar['bytes']
+
+            # Cargar el archivo original con openpyxl para mantener formato
+            wb_original = load_workbook(BytesIO(archivo_bytes_original))
+            nombre_hoja = st.session_state.comparador_archivo_revisar['nombre_hoja']
+            ws_original = wb_original[nombre_hoja]
+
+            # Obtener la fila de cabecera
+            fila_cabecera = st.session_state.comparador_archivo_revisar.get('fila_cabecera', 7)  # Default 7 si no existe
+
+            # Buscar la columna ESTATUS en la cabecera original
+            col_estatus_idx = None
+            for col_idx, cell in enumerate(ws_original[fila_cabecera + 1], start=1):  # +1 porque fila_cabecera es 0-based
+                if cell.value and str(cell.value).strip().upper() == "ESTATUS":
+                    col_estatus_idx = col_idx
+                    break
+
+            # Si no existe columna ESTATUS, buscar después de la última columna con datos
+            if col_estatus_idx is None:
+                # Encontrar la última columna con datos en la fila de cabecera
+                max_col = ws_original.max_column
+                for col_idx in range(1, max_col + 1):
+                    cell = ws_original.cell(row=fila_cabecera + 1, column=col_idx)
+                    if cell.value is None:
+                        col_estatus_idx = col_idx
+                        break
+                else:
+                    # Si todas las columnas tienen datos, agregar al final
+                    col_estatus_idx = max_col + 1
                 
+                # Escribir "ESTATUS" en la cabecera
+                ws_original.cell(row=fila_cabecera + 1, column=col_estatus_idx, value="ESTATUS")
+
+            # Obtener los índices de las filas de datos (después de la cabecera)
+            start_row = fila_cabecera + 2  # +2 porque: fila_cabecera (0-based) + 1 para cabecera + 1 para primera fila de datos
+
+            # Obtener DataFrame con los datos para calcular ESTATUS
+            df_datos = st.session_state.comparador_archivo_revisar['df'].copy()
+
+            # Calcular ESTATUS para cada fila
+            estatus_values = []
+            for idx in range(len(df_datos)):
+                try:
+                    if "NOTA FINAL" in df_datos.columns:
+                        nota_final = df_datos.loc[idx, "NOTA FINAL"]
+                        # Convertir a numérico si es posible
+                        try:
+                            nota_num = float(str(nota_final).strip())
+                            estatus = "Aprobado" if nota_num >= 12.5 else "Desaprobado"
+                        except:
+                            estatus = ""
+                    else:
+                        estatus = ""
+                except:
+                    estatus = ""
+                estatus_values.append(estatus)
+
+            # Escribir los valores de ESTATUS en el archivo Excel original
+            for i, estatus in enumerate(estatus_values):
+                row_idx = start_row + i
+                if row_idx <= ws_original.max_row:  # Solo escribir si la fila existe
+                    ws_original.cell(row=row_idx, column=col_estatus_idx, value=estatus)
+
+            # Guardar el archivo modificado en memoria
             output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                # Obtener nombre de la hoja original
-                nombre_hoja = st.session_state.comparador_archivo_revisar['nombre_hoja']
-                df_final.to_excel(writer, index=False, sheet_name=nombre_hoja)
-                
+            wb_original.save(output)
             excel_data = output.getvalue()
-                
+
+            # Botón de descarga
             col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
             with col_desc2:
                 st.download_button(
                     label="📥 Descargar OK_EVALUADOR.xlsx",
                     data=excel_data,
-                    file_name="OK_EVALUADOR.xlsx",
+                    file_name="OK_EVALUADOR_ESTATUS.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                    )
-                    
+                    use_container_width=True,
+                    help="Descarga el archivo original con la columna ESTATUS completada según la nota final"
+                )
+            ##      
     else:
         st.info("👆 Carga ambos archivos para comenzar la comparación")
     
