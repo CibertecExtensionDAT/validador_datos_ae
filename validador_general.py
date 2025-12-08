@@ -107,9 +107,9 @@ COLUMNAS_ARCHIVO1 = [
     "GRADO", "SECCIÓN", "CORREO INSTITUCIONAL", "NEURODIVERSIDAD (SÍ/NO)", "DNI"
 ]
 
-#COLUMNAS_ARCHIVO2 = [
-#    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
-#]
+COLUMNAS_TAB03 = [
+    "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", "P4 4PTOS.", "P5 4PTOS.", "NOTA EVALUADOR", "NOTA FINAL", "OBSERVADOS", "ESTATUS", "NUMERACIÓN"
+]
 
 COLUMNAS_ARCHIVO2_1P3P = [
     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
@@ -224,7 +224,7 @@ LISTA_COLEGIOS = [
 # ================================================
 def detectar_cabecera_automatica(df: pd.DataFrame, columnas_objetivo: list):
     """Detecta automáticamente la fila de cabecera"""
-    max_filas, max_cols = min(15, len(df)), min(15, len(df.columns))
+    max_filas, max_cols = min(15, len(df)), min(25, len(df.columns)) #15
     subset = df.iloc[:max_filas, :max_cols]
     columnas_objetivo_norm = [c.strip().lower() for c in columnas_objetivo]
 
@@ -1006,7 +1006,8 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story = []
                 
                 # Header
-                story.append(Paragraph("LISTADO DE ALUMNOS", style_title))
+                story.append(Paragraph("NOMINA DE ALUMNOS", style_title))
+                story.append(Paragraph(f"<b>Modalidad de Estudio: AL Alianza Educativa</b>", style_subtitle))
                 story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
                 story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
                 story.append(Paragraph(f"<b>Grado:</b> {grado} | <b>Sección:</b> {seccion}", style_subtitle))
@@ -1025,7 +1026,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                         str(row['NOMBRES']),
                         str(row['PATERNO']),
                         str(row['MATERNO']),
-                        str(row['NOTA VIGESIMAL 25%'])
+                        str(row['NOTA FINAL'])
                     ])
                 
                 # Crear tabla
@@ -1061,10 +1062,14 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 
                 # Footer con estadísticas
                 total_alumnos = len(grupo_df_sorted)
-                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA VIGESIMAL 25%'], errors='coerce') >= 12.5])
+                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
-                
+                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') == 20])
+                promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
+                promedio = round(promedio, 2)
+
                 story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
+                story.append(Paragraph(f"<b>Excelencia (nota 20):</b> {excelencia} | <b>Promedio del Aula:</b> {promedio}", styles['Normal']))
                 story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", styles['Normal']))
                 
                 # Generar PDF
@@ -4424,9 +4429,10 @@ with tab3:
     st.markdown("### 📄 Generación de Reportes PDF por Grado y Sección")
     st.info("""
     📌 **Instrucciones:**
-    - Sube un archivo **HOMOLOGADO** con formato: `{NombreColegio}_1P-3P_RV.xlsx` o `{NombreColegio}_4P-5S_RV.xlsx`
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK.xlsx`
     - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
     - Cada PDF contendrá la lista completa de estudiantes con sus notas
+    - Columnas de NOTA FINAL completas obligatoriamente
     """)
     
     # Selector de tipo de archivo
@@ -4448,7 +4454,7 @@ with tab3:
         nombre_archivo = archivo_reporte.name
         
         # Validar formato del nombre de archivo
-        patron_esperado = f"_{tipo_reporte}_RV.xlsx"
+        patron_esperado = f"_{tipo_reporte}_OK.xlsx"
         
         if not nombre_archivo.endswith(patron_esperado):
             st.error(f"❌ Formato de archivo incorrecto")
@@ -4476,11 +4482,11 @@ with tab3:
                 df_temp = pd.read_excel(archivo_reporte, header=None)
                 
                 # Detectar cabecera
-                fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_ARCHIVO2_4P5S)
+                fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_TAB03)
                 
                 if fila_cabecera is None:
                     st.error("❌ No se pudo detectar la cabecera automáticamente")
-                    st.info("Columnas esperadas: NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
+                    st.info("Columnas esperadas: NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN")
                     st.stop()
                 
                 # Leer con cabecera detectada
@@ -4488,11 +4494,11 @@ with tab3:
                 
                 # Normalizar nombres de columnas manteniendo formato correcto
                 columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
-                #cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
-                if tipo_reporte == "1P-3P":
-                    cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 100%"]
-                else:  # 4P-5S
-                    cols_requeridas = ["nro.", "paterno", "materno", "nombres", "curso", "grado", "sección", "nota vigesimal 25%"]
+                cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota final"]
+                #if tipo_reporte == "1P-3P":
+                #    cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota final 100%"]
+                #else:  # 4P-5S
+                #    cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota vigesimal 25%"]
                 
                 # Mapear columnas
                 cols_a_usar = []
@@ -4509,27 +4515,29 @@ with tab3:
                 df_reporte = df_reporte[cols_a_usar]
                 
                 # Renombrar a formato estándar (MAYÚSCULAS)
-                #df_reporte.columns = [
-                #    "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                #    "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
-                #]
-                if tipo_reporte == "1P-3P":
-                    df_reporte.columns = [
-                        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
-                    ]
-                else:  # 4P-5S
-                    df_reporte.columns = [
-                        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
-                    ]
+                df_reporte.columns = [
+                    "NRO.", "PATERNO", "MATERNO", "NOMBRE", "CURSO", 
+                    "GRADO", "SECCIÓN", "NOTA FINAL"
+                ]
+                #if tipo_reporte == "1P-3P":
+                #    df_reporte.columns = [
+                #        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                #        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
+                #    ]
+                #else:  # 4P-5S
+                #    df_reporte.columns = [
+                #        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
+                #        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
+                #    ]
                 
                 # Limpiar datos
-                df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
+                df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRE"])
                 
                 if df_reporte.empty:
                     st.error("❌ No hay datos válidos después de limpiar filas vacías")
                     st.stop()
+
+                df_reporte = df_reporte.rename(columns={"NOMBRE": "NOMBRES"})
                 
                 # Homologar datos
                 df_reporte = homologar_dataframe(df_reporte)
