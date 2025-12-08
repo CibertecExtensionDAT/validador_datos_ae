@@ -49,6 +49,10 @@ if "comparador_archivo_revisar" not in st.session_state:
     st.session_state.comparador_archivo_revisar = None
 if "comparador_resultados" not in st.session_state:
     st.session_state.comparador_resultados = None
+if "comparador_comparacion_realizada" not in st.session_state:
+    st.session_state.comparador_comparacion_realizada = False
+if "comparador_reset_counter" not in st.session_state:
+    st.session_state.comparador_reset_counter = 0
 if "archivo1_df" not in st.session_state:
     st.session_state.archivo1_df = None
 if "archivo2_df" not in st.session_state:
@@ -3457,9 +3461,87 @@ with tab1:
                                     
                                     # 4. OK (si existen)
                                     if len(df_1p3p_ok) > 0:
+                                        # Preparar df_1p3p_ok con el mismo procesamiento que el botón individual
+                                        df_1p3p_ok_zip = df_1p3p_ok.copy()
+                                        
+                                        # Resetear índice
+                                        df_1p3p_ok_zip = df_1p3p_ok_zip.reset_index(drop=True)
+                                        
+                                        # Normalizar nombres de columnas
+                                        df_1p3p_ok_zip.columns = df_1p3p_ok_zip.columns.str.strip()
+                                        
+                                        # Mapear columnas a formato certificado
+                                        mapeo_columnas = {}
+                                        for col in df_1p3p_ok_zip.columns:
+                                            col_upper = col.upper().strip()
+                                            
+                                            if col_upper == 'NRO.' or col_upper == 'NRO' or 'NRO' in col_upper and len(col_upper) <= 5:
+                                                mapeo_columnas[col] = 'NRO.'
+                                            elif col_upper == 'PATERNO':
+                                                mapeo_columnas[col] = 'PATERNO'
+                                            elif col_upper == 'MATERNO':
+                                                mapeo_columnas[col] = 'MATERNO'
+                                            elif col_upper == 'NOMBRES' or col_upper == 'NOMBRE':
+                                                mapeo_columnas[col] = 'NOMBRE'
+                                            elif col_upper == 'CURSO':
+                                                mapeo_columnas[col] = 'CURSO'
+                                            elif col_upper == 'GRADO':
+                                                mapeo_columnas[col] = 'GRADO'
+                                            elif col_upper == 'SECCIÓN' or col_upper == 'SECCION':
+                                                mapeo_columnas[col] = 'SECCIÓN'
+                                            elif col_upper == 'NOTA VIGESIMAL 100%':
+                                                mapeo_columnas[col] = 'NOTA LABORATORIO'
+                                        
+                                        df_1p3p_ok_zip = df_1p3p_ok_zip.rename(columns=mapeo_columnas)
+                                        
+                                        # Eliminar columnas no necesarias
+                                        columnas_a_eliminar = []
+                                        for col in df_1p3p_ok_zip.columns:
+                                            col_upper = col.upper()
+                                            if 'OBSERVADOS' in col_upper or 'OBSERVACION' in col_upper:
+                                                columnas_a_eliminar.append(col)
+                                        
+                                        df_1p3p_ok_zip = df_1p3p_ok_zip.drop(columns=columnas_a_eliminar, errors='ignore')
+                                        
+                                        # Agregar columnas nuevas para certificado 1P-3P
+                                        nuevas_columnas = [
+                                            '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                            'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
+                                            'NOTA EVALUADOR', 'NOTA FINAL', 
+                                            'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
+                                        ]
+                                        for col in nuevas_columnas:
+                                            if col not in df_1p3p_ok_zip.columns:
+                                                df_1p3p_ok_zip[col] = ''
+                                        
+                                        # Reordenar columnas específicas para 1P-3P
+                                        columnas_certificado_1p3p = [
+                                            'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
+                                            'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
+                                            'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 
+                                            'NOTA FINAL', 'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
+                                        ]
+                                        columnas_existentes = [col for col in columnas_certificado_1p3p if col in df_1p3p_ok_zip.columns]
+                                        df_1p3p_ok_zip = df_1p3p_ok_zip[columnas_existentes]
+
+                                        # COPIAR NOTA LABORATORIO en NOTA FINAL
+                                        if "NOTA LABORATORIO" in df_1p3p_ok_zip.columns and "NOTA FINAL" in df_1p3p_ok_zip.columns:
+                                            df_1p3p_ok_zip["NOTA FINAL"] = pd.to_numeric(df_1p3p_ok_zip["NOTA LABORATORIO"], errors="coerce")
+
+                                        # CALCULAR ESTATUS
+                                        if "ESTATUS" in df_1p3p_ok_zip.columns and "NOTA FINAL" in df_1p3p_ok_zip.columns:
+                                            nota_final = pd.to_numeric(df_1p3p_ok_zip["NOTA FINAL"], errors="coerce")
+                                            df_1p3p_ok_zip["ESTATUS"] = nota_final.apply(
+                                                lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
+                                            )
+
+                                        # Regenerar Nro secuencial
+                                        if 'NRO.' in df_1p3p_ok_zip.columns:
+                                            df_1p3p_ok_zip['NRO.'] = range(1, len(df_1p3p_ok_zip) + 1)
+                                        
                                         dict_ok_1p3p = {
                                             "1P-3P": {
-                                                'df': df_1p3p_ok.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                                'df': df_1p3p_ok_zip,
                                                 'fila_cabecera': st.session_state.archivo2_1p3p_fila_cabecera
                                             }
                                         }
@@ -3512,7 +3594,7 @@ with tab1:
                                     # 2. ACTUAL
                                     dict_actual_4p5s = {
                                         "4P-5S": {
-                                            'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                            'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore"),
                                             'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                         }
                                     }
@@ -3527,7 +3609,7 @@ with tab1:
                                     if len(df_4p5s_observados) > 0:
                                         dict_observados_4p5s = {
                                             "4P-5S": {
-                                                'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR"], errors="ignore"),
+                                                'df': df_4p5s_observados.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore"),
                                                 'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                             }
                                         }
@@ -3540,9 +3622,12 @@ with tab1:
                                     
                                     # 4. OK (si existen)
                                     if len(df_4p5s_ok) > 0:
+                                        # Usar copia del DataFrame ya procesado
+                                        df_4p5s_ok_zip = df_4p5s_ok.copy()
+                                        
                                         dict_ok_4p5s = {
                                             "4P-5S": {
-                                                'df': df_4p5s_ok,
+                                                'df': df_4p5s_ok_zip,
                                                 'fila_cabecera': st.session_state.archivo2_4p5s_fila_cabecera
                                             }
                                         }
@@ -4028,7 +4113,7 @@ with tab2:
         archivo_base = st.file_uploader(
             "Selecciona el archivo certificado OK",
             type=["xlsx"],
-            key="uploader_base_cert"
+            key=f"uploader_base_cert_{st.session_state.comparador_reset_counter}"
         )
         
         if archivo_base:
@@ -4086,7 +4171,7 @@ with tab2:
         archivo_revisar = st.file_uploader(
             "Selecciona el archivo certificado OK_EVALUADOR",
             type=["xlsx"],
-            key="uploader_revisar_cert"
+            key=f"uploader_revisar_cert_{st.session_state.comparador_reset_counter}"
         )
         
         if archivo_revisar:
@@ -4326,6 +4411,10 @@ with tab2:
         st.session_state.comparador_archivo_base = None
         st.session_state.comparador_archivo_revisar = None
         st.session_state.comparador_resultados = None
+        st.session_state.comparador_comparacion_realizada = False
+
+        st.session_state.comparador_reset_counter += 1
+
         st.rerun()
 
 # ================================================
