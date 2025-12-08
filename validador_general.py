@@ -87,6 +87,18 @@ if "cursos_equivalentes" not in st.session_state:
         "LEARNING FOR BEGINNERS 1", "LEARNING FOR BEGINNERS 2", "CODE FOR KIDS"
     ]
 
+# Tab03
+if "tab3_archivo_procesado" not in st.session_state:
+    st.session_state.tab3_archivo_procesado = False
+if "tab3_df_reporte" not in st.session_state:
+    st.session_state.tab3_df_reporte = None
+if "tab3_nombre_colegio" not in st.session_state:
+    st.session_state.tab3_nombre_colegio = ""
+if "tab3_tipo_archivo" not in st.session_state:
+    st.session_state.tab3_tipo_archivo = ""
+if "tab3_reset_counter" not in st.session_state:
+    st.session_state.tab3_reset_counter = 0
+
 # Estados de Certificados
 if 'df_procesado' not in st.session_state:
     st.session_state.df_procesado = None
@@ -1045,6 +1057,14 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     spaceAfter=2*mm,
                     alignment=TA_LEFT
                 )
+                style_normal = ParagraphStyle(
+                    'CustomSubtitle',
+                    parent=styles['Normal'],
+                    fontSize=9,
+                    textColor=colors.HexColor('#2c3e50'),
+                    spaceAfter=2*mm,
+                    alignment=TA_LEFT
+                )
                 
                 # Construir contenido
                 story = []
@@ -1111,11 +1131,11 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
                 promedio = round(promedio, 2)
 
-                story.append(Paragraph(f"<b>Resultados:</b>", styles['Normal']))
-                story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
-                story.append(Paragraph(f"<b>Excelencia (nota 20):</b> {excelencia}", styles['Normal']))
-                story.append(Paragraph(f"<b>Promedio del Aula:</b> {promedio}", styles['Normal']))
-                story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", styles['Normal']))
+                story.append(Paragraph(f"<b>Resultados:</b>", style_subtitle))
+                story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", style_normal))
+                story.append(Paragraph(f"<b>Excelencia (nota 20):</b> {excelencia}", style_normal))
+                story.append(Paragraph(f"<b>Promedio del Aula:</b> {promedio}", style_normal))
+                story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", style_normal))
                 
                 # GENERAR PDF CON ENCABEZADO PERSONALIZADO (Primera pasada)
                 doc.build(story, onFirstPage=encabezado_pie_pagina, onLaterPages=encabezado_pie_pagina)
@@ -4520,21 +4540,22 @@ with tab3:
     - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK.xlsx`
     - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
     - Cada PDF contendrá la lista completa de estudiantes con sus notas
-    - Columnas de NOTA FINAL completas obligatoriamente
+    - **IMPORTANTE:** Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
     """)
     
     # Selector de tipo de archivo
     tipo_reporte = st.radio(
         "Selecciona el tipo de archivo homologado:",
         ["1P-3P", "4P-5S"],
-        horizontal=True
+        horizontal=True,
+        key="radio_tipo_reporte"
     )
     
-    # Uploader de archivo
+    # Uploader de archivo CON KEY DINÁMICA para permitir limpieza
     archivo_reporte = st.file_uploader(
         f"Selecciona el archivo homologado {tipo_reporte}",
         type=["xlsx"],
-        key="uploader_reporte"
+        key=f"uploader_reporte_{st.session_state.tab3_reset_counter}"
     )
     
     if archivo_reporte:
@@ -4564,7 +4585,7 @@ with tab3:
         st.success(f"🏫 Colegio detectado: **{nombre_colegio_reporte}**")
         
         # Cargar y procesar archivo
-        with st.spinner("📊 Procesando archivo..."):
+        with st.spinner("📊 Procesando y validando archivo..."):
             try:
                 # Leer archivo sin procesar
                 df_temp = pd.read_excel(archivo_reporte, header=None)
@@ -4583,10 +4604,6 @@ with tab3:
                 # Normalizar nombres de columnas manteniendo formato correcto
                 columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
                 cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota final"]
-                #if tipo_reporte == "1P-3P":
-                #    cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota final 100%"]
-                #else:  # 4P-5S
-                #    cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota vigesimal 25%"]
                 
                 # Mapear columnas
                 cols_a_usar = []
@@ -4607,16 +4624,6 @@ with tab3:
                     "NRO.", "PATERNO", "MATERNO", "NOMBRE", "CURSO", 
                     "GRADO", "SECCIÓN", "NOTA FINAL"
                 ]
-                #if tipo_reporte == "1P-3P":
-                #    df_reporte.columns = [
-                #        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                #        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%"
-                #    ]
-                #else:  # 4P-5S
-                #    df_reporte.columns = [
-                #        "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
-                #        "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"
-                #    ]
                 
                 # Limpiar datos
                 df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRE"])
@@ -4627,14 +4634,82 @@ with tab3:
 
                 df_reporte = df_reporte.rename(columns={"NOMBRE": "NOMBRES"})
                 
-                # Homologar datos
-                df_reporte = homologar_dataframe(df_reporte)
+                # VALIDACIÓN ESTRICTA DE CAMPOS OBLIGATORIOS
+                st.markdown("### 🔍 Validando campos obligatorios...")
                 
+                columnas_obligatorias = ["PATERNO", "MATERNO", "NOMBRES", "GRADO", "SECCIÓN", "CURSO", "NOTA FINAL"]
+                errores_validacion = []
+                
+                for col in columnas_obligatorias:
+                    if col not in df_reporte.columns:
+                        errores_validacion.append(f"Columna '{col}' no encontrada")
+                        continue
+                    
+                    # Contar valores vacíos (NaN, None, "", espacios en blanco)
+                    vacios = df_reporte[col].isna() | (df_reporte[col].astype(str).str.strip() == "")
+                    num_vacios = vacios.sum()
+                    
+                    if num_vacios > 0:
+                        # Obtener índices de filas con valores vacíos
+                        indices_vacios = df_reporte[vacios].index.tolist()
+                        filas_vacias = [idx + fila_cabecera + 2 for idx in indices_vacios]
+                        
+                        errores_validacion.append({
+                            'columna': col,
+                            'num_vacios': num_vacios,
+                            'filas': filas_vacias[:10]  # Mostrar máximo 10 filas
+                        })
+                
+                # Si hay errores, mostrarlos y detener
+                if errores_validacion:
+                    st.error("❌ **VALIDACIÓN FALLIDA: Existen campos obligatorios vacíos**")
+                    st.warning("⚠️ Todas las columnas obligatorias deben estar completas antes de generar los reportes PDF")
+                    
+                    st.markdown("---")
+                    st.markdown("### 📋 Detalle de Errores Encontrados")
+                    
+                    for error in errores_validacion:
+                        if isinstance(error, dict):
+                            st.error(f"**Columna '{error['columna']}'**: {error['num_vacios']} valor(es) vacío(s)")
+                            
+                            if len(error['filas']) > 0:
+                                filas_texto = ", ".join(map(str, error['filas']))
+                                if error['num_vacios'] > 10:
+                                    st.info(f"📍 Filas afectadas (primeras 10): {filas_texto}... y {error['num_vacios'] - 10} más")
+                                else:
+                                    st.info(f"📍 Filas afectadas: {filas_texto}")
+                            
+                            # Mostrar DataFrame con las filas problemáticas
+                            df_problematico = df_reporte[df_reporte[error['columna']].isna() | 
+                                                         (df_reporte[error['columna']].astype(str).str.strip() == "")]
+                            
+                            if not df_problematico.empty:
+                                st.markdown(f"**Registros con '{error['columna']}' vacío:**")
+                                st.dataframe(df_problematico.head(10), hide_index=True)
+                        else:
+                            st.error(error)
+                    
+                    st.markdown("---")
+                    st.info("💡 **Solución:** Corrige los valores vacíos en el archivo Excel y vuelve a subirlo")
+                    st.stop()
+                
+                # Si llegamos aquí, todas las validaciones pasaron
+                st.success("✅ **Todas las validaciones pasaron correctamente**")
                 st.success(f"✅ Archivo cargado: {len(df_reporte)} registros")
                 st.success(f"📍 Cabecera detectada en fila {fila_cabecera + 1}")
                 
+                # Homologar datos
+                df_reporte = homologar_dataframe(df_reporte)
+                
+                # Guardar en session state
+                st.session_state.tab3_df_reporte = df_reporte
+                st.session_state.tab3_nombre_colegio = nombre_colegio_reporte
+                st.session_state.tab3_tipo_archivo = tipo_reporte
+                st.session_state.tab3_archivo_procesado = True
+                
                 # Mostrar preview
-                st.markdown("#### Vista previa de datos")
+                st.markdown("---")
+                st.markdown("### 📊 Vista previa de datos")
                 st.dataframe(df_reporte, hide_index=True)
                 
                 # Agrupar datos
@@ -4665,8 +4740,11 @@ with tab3:
                         })
                     st.dataframe(pd.DataFrame(grupos_info), hide_index=True)
                 
-                # Botón para generar PDFs
+                # Botones de acción
                 st.markdown("---")
+                #col_btn1, col_btn2 = st.columns([3, 1])
+                
+                #with col_btn1:
                 if st.button("🎯 GENERAR REPORTES PDF", type="primary", use_container_width=True):
                     generar_reportes_pdf(
                         df_reporte, 
@@ -4679,6 +4757,20 @@ with tab3:
                 import traceback
                 with st.expander("🔍 Ver error detallado"):
                     st.code(traceback.format_exc())
+    
+    else:
+        # Mostrar mensaje cuando no hay archivo
+        st.info("👆 Sube un archivo para comenzar")
+    
+    # Botón de limpieza (disponible siempre en la parte inferior)
+    st.markdown("---")
+    if st.button("🔄 Limpiar y empezar de nuevo", use_container_width=True, key="btn_reset_tab3"):
+        st.session_state.tab3_archivo_procesado = False
+        st.session_state.tab3_df_reporte = None
+        st.session_state.tab3_nombre_colegio = ""
+        st.session_state.tab3_tipo_archivo = ""
+        st.session_state.tab3_reset_counter += 1 
+        st.rerun()
 
 # ================================================
 # TAB 4: Generador de Certificados
