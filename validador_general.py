@@ -951,13 +951,57 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
 def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
     """
     Genera reportes PDF agrupados por Grado → Sección → Curso
+    Con encabezado personalizado: Logo izquierda, paginación y fecha derecha
     
     Args:
         df: DataFrame con los datos homologados
         nombre_colegio: Nombre del colegio para el header
         tipo_archivo: '1P-3P' o '4P-5S'
     """
+
+    # Función para dibujar encabezado y pie
+    def encabezado_pie_pagina(canvas, doc):
+        """
+        Dibuja el encabezado y pie de página en cada página
+        """
+        canvas.saveState()
+        
+        # Dimensiones de la página
+        ancho, alto = A4
+        
+        # ====== ENCABEZADO IZQUIERDO: Logo "Alianza Educativa" ======
+        canvas.setFont('Helvetica-Bold', 11)
+        canvas.setFillColor(colors.HexColor('#1a5490'))
+        
+        # Posición del logo (esquina superior izquierda)
+        x_logo = 15 * mm
+        y_logo = alto - 12 * mm
+        
+        # Texto "Alianza Educativa" (con salto de línea)
+        canvas.drawString(x_logo, y_logo, "Alianza")
+        canvas.drawString(x_logo, y_logo - 4*mm, "Educativa")
+        
+        # ====== ENCABEZADO DERECHO: Fecha ======
+        canvas.setFont('Helvetica', 9)
+        canvas.setFillColor(colors.black)
+        
+        # Posición del texto derecho (esquina superior derecha)
+        x_derecha = ancho - 15 * mm
+        y_derecha = alto - 12 * mm
+        
+        # Fecha de generación
+        fecha_actual = datetime.now().strftime("%d/%m/%Y")
+        texto_fecha = f"Fecha: {fecha_actual}"
+        canvas.drawRightString(x_derecha, y_derecha, texto_fecha)
+        
+        # Línea separadora debajo del encabezado
+        canvas.setStrokeColor(colors.HexColor('#1a5490'))
+        canvas.setLineWidth(0.5)
+        canvas.line(15*mm, alto - 18*mm, ancho - 15*mm, alto - 18*mm)
+        
+        canvas.restoreState()
     
+    # GENERACIÓN DE REPORTES
     with st.spinner("📝 Generando reportes PDF..."):
         # Crear buffer para el ZIP
         zip_buffer = BytesIO()
@@ -973,13 +1017,13 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 # Crear PDF individual
                 pdf_buffer = BytesIO()
                 
-                # Configurar documento
+                # Configurar documento con márgenes ajustados para el encabezado
                 doc = SimpleDocTemplate(
                     pdf_buffer,
                     pagesize=A4,
                     rightMargin=15*mm,
                     leftMargin=15*mm,
-                    topMargin=15*mm,
+                    topMargin=22*mm,
                     bottomMargin=15*mm
                 )
                 
@@ -1005,9 +1049,8 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 # Construir contenido
                 story = []
                 
-                # Header
+                # Header del contenido
                 story.append(Paragraph("NOMINA DE ALUMNOS", style_title))
-                story.append(Paragraph(f"<b>Modalidad de Estudio: AL Alianza Educativa</b>", style_subtitle))
                 story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
                 story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
                 story.append(Paragraph(f"<b>Grado:</b> {grado} | <b>Sección:</b> {seccion}", style_subtitle))
@@ -1045,9 +1088,9 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     # Datos
                     ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
                     ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                    ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # Nro centrado
-                    ('ALIGN', (1, 1), (3, -1), 'LEFT'),    # Nombres izquierda
-                    ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Nota centrada
+                    ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+                    ('ALIGN', (1, 1), (3, -1), 'LEFT'),
+                    ('ALIGN', (4, 1), (4, -1), 'CENTER'),
                     ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                     ('FONTSIZE', (0, 1), (-1, -1), 9),
                     ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
@@ -1068,15 +1111,60 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
                 promedio = round(promedio, 2)
 
+                story.append(Paragraph(f"<b>Resultados:</b>", styles['Normal']))
                 story.append(Paragraph(f"<b>Total de alumnos:</b> {total_alumnos}", styles['Normal']))
-                story.append(Paragraph(f"<b>Excelencia (nota 20):</b> {excelencia} | <b>Promedio del Aula:</b> {promedio}", styles['Normal']))
+                story.append(Paragraph(f"<b>Excelencia (nota 20):</b> {excelencia}", styles['Normal']))
+                story.append(Paragraph(f"<b>Promedio del Aula:</b> {promedio}", styles['Normal']))
                 story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", styles['Normal']))
                 
-                # Generar PDF
-                doc.build(story)
+                # GENERAR PDF CON ENCABEZADO PERSONALIZADO (Primera pasada)
+                doc.build(story, onFirstPage=encabezado_pie_pagina, onLaterPages=encabezado_pie_pagina)
+                
+                # POST-PROCESAMIENTO: Agregar paginación X/Y (Segunda pasada)
+                pdf_buffer.seek(0)
+                pdf_reader = PyPDF2.PdfReader(pdf_buffer)
+                total_paginas = len(pdf_reader.pages)
+                
+                # Crear nuevo buffer para el PDF modificado
+                pdf_final_buffer = BytesIO()
+                pdf_writer = PyPDF2.PdfWriter()
+                
+                # Agregar número de página en formato X/Y a cada página
+                for numero_pagina in range(total_paginas):
+                    # Obtener página original
+                    pagina = pdf_reader.pages[numero_pagina]
+                    
+                    # Crear overlay con el número de página
+                    overlay_buffer = BytesIO()
+                    overlay_canvas = canvas.Canvas(overlay_buffer, pagesize=A4)
+                    
+                    # Dimensiones
+                    ancho, alto = A4
+                    x_derecha = ancho - 15 * mm
+                    y_derecha = alto - 16 * mm
+                    
+                    # Dibujar texto de paginación
+                    overlay_canvas.setFont('Helvetica', 9)
+                    overlay_canvas.setFillColor(colors.black)
+                    texto_pagina = f"Página {numero_pagina + 1}/{total_paginas}"
+                    overlay_canvas.drawRightString(x_derecha, y_derecha, texto_pagina)
+                    overlay_canvas.save()
+                    
+                    # Leer el overlay
+                    overlay_buffer.seek(0)
+                    overlay_pdf = PyPDF2.PdfReader(overlay_buffer)
+                    overlay_page = overlay_pdf.pages[0]
+                    
+                    # Combinar página original con overlay
+                    pagina.merge_page(overlay_page)
+                    pdf_writer.add_page(pagina)
+                
+                # Escribir PDF final
+                pdf_writer.write(pdf_final_buffer)
+                pdf_final_buffer.seek(0)
                 
                 # Guardar en ZIP
-                pdf_bytes = pdf_buffer.getvalue()
+                pdf_bytes = pdf_final_buffer.getvalue()
                 nombre_archivo = f"{grado}_{seccion}_{curso.replace('/', '-')}.pdf"
                 zip_file.writestr(nombre_archivo, pdf_bytes)
                 
