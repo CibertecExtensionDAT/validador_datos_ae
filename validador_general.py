@@ -4313,7 +4313,7 @@ with tab2:
     
     # COLUMNA IZQUIERDA: Archivo Base
     with col_izq:
-        st.markdown("#### 📄 Archivo OK")
+        st.markdown("#### 📄 Archivo: {NombreColegio}_4P-5S_OK")
         st.caption("Puede tener campos vacíos en: NOTA EVALUADOR, P1-P5, NOTA FINAL")
         
         archivo_base = st.file_uploader(
@@ -4363,6 +4363,7 @@ with tab2:
                 with st.expander("Vista previa - OK", expanded=False):
                     st.dataframe(st.session_state.comparador_archivo_base['df'].head(10), hide_index=True)
         else:
+            st.info("⬆️ Por favor, sube el archivo OK para continuar")
             # Si no hay archivo, limpiar datos cargados y resultados
             if st.session_state.comparador_archivo_base is not None:
                 st.session_state.comparador_archivo_base = None
@@ -4371,7 +4372,7 @@ with tab2:
     
     # COLUMNA DERECHA: Archivo a Revisar
     with col_der:
-        st.markdown("#### 🔍 Archivo OK_EVALUADOR")
+        st.markdown("#### 🔍 Archivo: {NombreColegio}_4P-5S_OK_EVALUADOR")
         st.caption("Debe tener completos: NOTA EVALUADOR y NOTA FINAL")
         
         archivo_revisar = st.file_uploader(
@@ -4379,8 +4380,28 @@ with tab2:
             type=["xlsx"],
             key=f"uploader_revisar_cert_{st.session_state.comparador_reset_counter}"
         )
-        
-        if archivo_revisar:
+
+        # Extraer nombre del colegio del nombre del archivo
+        if archivo_revisar is not None:
+            nombre_archivo_evaluador = archivo_revisar.name
+            patron_esperado_evaluador = f"_4P-5S_OK_EVALUADOR.xlsx"
+
+            if not nombre_archivo_evaluador.endswith(patron_esperado_evaluador):
+                st.error(f"❌ Formato de archivo incorrecto")
+                st.warning(f"⚠️ El archivo debe terminar en: `{patron_esperado_evaluador}`")
+                st.info(f"📝 Ejemplo correcto: `Colegio{patron_esperado_evaluador}`")
+                st.info(f"📝 Tu archivo: `{nombre_archivo_evaluador}`")
+                st.stop()
+            
+            # Extraer nombre del colegio (quitar el sufijo)
+            nombre_colegio_evaluador = nombre_archivo_evaluador.replace(patron_esperado_evaluador, "")
+
+            # Validar que el nombre del colegio no esté vacío
+            if not nombre_colegio_evaluador or nombre_colegio_evaluador.strip() == "":
+                st.error("❌ No se pudo extraer el nombre del colegio del archivo")
+                st.info(f"Archivo recibido: `{nombre_archivo_evaluador}`")
+                st.stop()
+            
             archivo_revisar_bytes = archivo_revisar.read()
             archivo_revisar.seek(0)
             
@@ -4431,7 +4452,9 @@ with tab2:
             if st.session_state.comparador_archivo_revisar:
                 with st.expander("Vista previa - OK_EVALUADOR", expanded=False):
                     st.dataframe(st.session_state.comparador_archivo_revisar['df'].head(10), hide_index=True)
+
         else:
+            st.info("⬆️ Por favor, sube el archivo OK_EVALUADOR para continuar")
             # Si no hay archivo, limpiar datos cargados y resultados
             if st.session_state.comparador_archivo_revisar is not None:
                 st.session_state.comparador_archivo_revisar = None
@@ -4495,7 +4518,7 @@ with tab2:
             st.divider()
             st.success("🎉 **¡VALIDACIÓN EXITOSA!**")
             st.success("✅ Todos los datos y cálculos son correctos")
-            st.balloons()
+            #st.balloons()
             
             # GENERAR ARCHIVO OK_EVALUADOR CON ESTATUS
             df_final = st.session_state.comparador_archivo_revisar['df'].copy()
@@ -4600,9 +4623,9 @@ with tab2:
             col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
             with col_desc2:
                 st.download_button(
-                    label="📥 Descargar OK_EVALUADOR.xlsx",
+                    label="📥 Descargar {NombreColegio}_OK_EVALUADOR_ESTATUS.xlsx",
                     data=excel_data,
-                    file_name="OK_EVALUADOR_ESTATUS.xlsx",
+                    file_name=f"{nombre_colegio_evaluador}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                     help="Descarga el archivo original con la columna ESTATUS completada según la nota final"
@@ -4618,9 +4641,7 @@ with tab2:
         st.session_state.comparador_archivo_revisar = None
         st.session_state.comparador_resultados = None
         st.session_state.comparador_comparacion_realizada = False
-
         st.session_state.comparador_reset_counter += 1
-
         st.rerun()
 
 # ================================================
@@ -4630,7 +4651,7 @@ with tab3:
     st.markdown("### 📄 Generación de Reportes PDF por Grado y Sección")
     st.info("""
     📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK.xlsx`
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx`
     - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
     - Cada PDF contendrá la lista completa de estudiantes con sus notas
     - **IMPORTANTE:** Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
@@ -4656,7 +4677,10 @@ with tab3:
         nombre_archivo = archivo_reporte.name
         
         # Validar formato del nombre de archivo
-        patron_esperado = f"_{tipo_reporte}_OK.xlsx"
+        if tipo_reporte == "1P-3P":
+            patron_esperado = f"_{tipo_reporte}_OK.xlsx"
+        else: # "4P-5S"
+            patron_esperado = f"_{tipo_reporte}_OK_EVALUADOR_ESTATUS.xlsx"
         
         if not nombre_archivo.endswith(patron_esperado):
             st.error(f"❌ Formato de archivo incorrecto")
@@ -4872,7 +4896,7 @@ with tab4:
     st.markdown("## 🎓 Generador de Certificados PDF con Plantillas Automáticas")
     st.info("""
     📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK.xlsx`
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx`
     - Se generarán archivos comprimidos con todos los certificados correspondientes.
     - Si el archivo empieza con "P", todos los estudiantes van al grupo 1 (Progresivo).
     - Si en el archivo la segunda letra es 'I' y está aprobado (>= 12.5), se aplicará la marca de agua.
