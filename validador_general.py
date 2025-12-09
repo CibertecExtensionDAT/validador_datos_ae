@@ -831,6 +831,11 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
                         vertical=celda_referencia.alignment.vertical
                     )
 
+    # Convertir TODAS las cabeceras a mayúsculas (incluyendo las existentes)
+    for col_idx, col_name in enumerate(df_procesado.columns, start=1):
+        celda_cabecera = ws.cell(row=fila_cabecera_excel, column=col_idx)
+        celda_cabecera.value = str(col_name).upper()
+
     # Eliminar filas de datos antiguos (preservando cabecera y filas previas)
     if ws.max_row >= fila_inicio_datos:
         ws.delete_rows(fila_inicio_datos, ws.max_row - fila_inicio_datos + 1)
@@ -938,6 +943,11 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
                         horizontal=celda_referencia.alignment.horizontal,
                         vertical=celda_referencia.alignment.vertical
                     )
+
+        # Convertir TODAS las cabeceras a mayúsculas (incluyendo las existentes)
+        for col_idx, col_name in enumerate(df_procesado.columns, start=1):
+            celda_cabecera = ws.cell(row=fila_cabecera_excel, column=col_idx)
+            celda_cabecera.value = str(col_name).upper()
         
         # Eliminar filas de datos antiguos
         if ws.max_row >= fila_inicio_datos:
@@ -1690,7 +1700,7 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         
         for col_idx, columna in enumerate(df_procesado.columns, start=1):
             celda = ws_nueva.cell(row=fila_cabecera, column=col_idx)
-            celda.value = columna
+            celda.value = str(columna).upper()
             celda.fill = header_fill
             celda.font = header_font
             celda.alignment = header_alignment
