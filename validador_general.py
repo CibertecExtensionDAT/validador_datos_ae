@@ -1,6 +1,7 @@
 # ===============================================
 # PASO 1: SUBIDA Y VALIDACIÓN DEL ARCHIVO 1
 # ===============================================
+import io
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -135,10 +136,6 @@ COLUMNAS_EVALUADOR = [
     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", 
     "NOTA VIGESIMAL 25%", "NOTAS VIGESIMALES 75%", "PROMEDIO", "OBSERVADOS"
 ]
-
-#COLUMNAS_ARCHIVO_PDF = [
-#    'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 25%'
-#]
 
 COLUMNAS_ARCHIVO_PDF_1P3P = [
     'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 100%'
@@ -1869,6 +1866,92 @@ def clasificar_estudiantes_por_nota(df, nombre_archivo):
 
     return grupos
 
+# Función Tab4
+def validar_y_mapear_columnas(df):
+    """
+    Valida que el DataFrame tenga las columnas esperadas del usuario y las mapea
+    a los nombres que espera procesar_excel_inicial.
+    
+    Retorna: (df_mapeado, exito, mensaje)
+    """
+    # Columnas esperadas del archivo del usuario
+    columnas_esperadas = [
+        "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", 
+        "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", 
+        "P4 4PTOS.", "P5 4PTOS.", "NOTA EVALUADOR", "NOTA FINAL", "OBSERVADOS", 
+        "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+    ]
+    
+    # Normalizar nombres de columnas del DataFrame (strip espacios)
+    df.columns = df.columns.str.strip()
+    
+    # Verificar que todas las columnas esperadas estén presentes
+    columnas_faltantes = [col for col in columnas_esperadas if col not in df.columns]
+    
+    if columnas_faltantes:
+        mensaje_error = f"❌ El archivo no tiene las columnas requeridas. Faltan: {', '.join(columnas_faltantes)}"
+        return None, False, mensaje_error
+    
+    # Mapeo de columnas del usuario a las que espera la función
+    mapeo_columnas = {
+        "NRO.": "nro",
+        "PATERNO": "paterno",
+        "MATERNO": "materno",
+        "NOMBRE": "nombre",
+        "GRADO": "grado",
+        "SECCIÓN": "sección",
+        "CURSO": "curso",
+        "NOTA LABORATORIO": "nota lab",
+        "¿ASISTIÓ?": "lista de asistencia",
+        "NOTA EVALUADOR": "nota de examen cibertec",
+        "NOTA FINAL": "nota final",
+        "OBSERVADOS": "observación sobre nota desaprobatoria",
+        "ESTATUS": "status",
+        "NUMERACIÓN": "numeración",
+        "HORAS PROGRESIVO": "horas_progresivo"
+    }
+    
+    # Seleccionar solo las columnas que necesitamos y renombrarlas
+    columnas_a_mantener = list(mapeo_columnas.keys())
+    df_filtrado = df[columnas_a_mantener].copy()
+
+    orden_final = [
+        "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO",
+        "NOTA LABORATORIO", "¿ASISTIÓ?", "NOTA EVALUADOR", "NOTA FINAL",
+        "OBSERVADOS", "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+    ]
+    df_filtrado = df_filtrado[orden_final]
+
+    # Crear 10 filas vacías con las mismas columnas
+    filas_vacias = pd.DataFrame(columns=df_filtrado.columns, index=range(10))
+
+    # Agregar una fila con los nombres de columnas mapeados (la que será el encabezado)
+    nombres_mapeados = [mapeo_columnas[col] for col in orden_final]
+    fila_encabezado = pd.DataFrame([nombres_mapeados], columns=df_filtrado.columns)
+    
+    # Concatenar: 10 filas vacías + fila de encabezado + datos
+    df_formateado = pd.concat([filas_vacias, fila_encabezado, df_filtrado], ignore_index=True)
+
+    return df_formateado, True, "✅ Columnas validadas y mapeadas correctamente"
+
+def detectar_fila_encabezado(df):
+    """
+    Detecta la fila que contiene el encabezado buscando palabras clave.
+    Retorna el índice de la fila o None si no la encuentra.
+    """
+    palabras_clave = ['paterno', 'materno', 'nombre', 'nro', 'grado', 'sección', 'curso', 'nota final']
+    
+    for idx, row in df.iterrows():
+        # Convertir toda la fila a string y minúsculas
+        row_str = ' '.join(str(val).lower() for val in row if pd.notna(val))
+        
+        # Si encuentra al menos 4 palabras clave, asume que es el encabezado
+        coincidencias = sum(1 for palabra in palabras_clave if palabra in row_str)
+        if coincidencias >= 4:
+            return idx
+    
+    return None
+
 # Función para procesar el archivo Excel Base
 def procesar_excel_inicial(uploaded_file):
     """
@@ -1877,9 +1960,9 @@ def procesar_excel_inicial(uploaded_file):
     try:
         # Lista de columnas
         columnas_requeridas = [
-            'nro', 'paterno', 'materno', 'nombre', 'grado', 'sección', 'curso', 
-            'nota lab', 'lista de asistencia', 'nota de examen cibertec', 'nota final', 
-            'observación sobre nota desaprobatoria', 'status', 'numeración', 'horas_progresivo'
+            "nro", "paterno", "materno", "nombre", "grado", "sección", "curso", 
+            "nota lab", "lista de asistencia", "nota de examen cibertec", "nota final", 
+            "observación sobre nota desaprobatoria", "status", "numeración", "horas_progresivo"
         ]
         
         df_original = pd.read_excel(uploaded_file)
@@ -4777,6 +4860,19 @@ with tab3:
 # ================================================
 with tab4:
     st.markdown("## 🎓 Generador de Certificados PDF con Plantillas Automáticas")
+    st.info("""
+    📌 **Instrucciones:**
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK.xlsx`
+    - Se generarán archivos comprimidos con todos los certificados correspondientes.
+    - Si el archivo empieza con "P", todos los estudiantes van al grupo 1 (Progresivo).
+    - Si en el archivo la segunda letra es 'I' y está aprobado (>= 12.5), se aplicará la marca de agua.
+    - Si el alumno está desaprobado, el certificado será de Participación.
+            
+    ⚠️ **IMPORTANTE:** 
+    - Las columnas deben ser: "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", "P4 4PTOS.", "P5 4PTOS.", "NOTA EVALUADOR", "NOTA FINAL", "OBSERVADOS", "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+    - La columna "NOTA FINAL" debe estar completa (sin valores vacíos).
+    - La única columna agregada **manualmente** debe ser **"HORAS PROGRESIVO"** con su valor correspondiente (El archivo OK no contiene esta columna normalmente), si no está completa se imprimirán con ese campo vacío.
+    """)
 
     # Variable de estado para controlar el procesamineto del archivo
     if 'archivo_procesado' not in st.session_state:
@@ -4791,11 +4887,51 @@ with tab4:
         df_original = pd.read_excel(uploaded_file)
         st.write(f"**Dimensiones originales:** {df_original.shape[0]} filas x {df_original.shape[1]} columnas")
         st.write(f"**Nombre del archivo:** {uploaded_file.name}")
-        st.dataframe(df_original.head(15))
+        #st.dataframe(df_original.head(15))
 
-        # Procesar automáticamente el archivo
-        with st.spinner("Procesando archivo y generando certificados"):
-            df_procesado, exito, mensaje = procesar_excel_inicial(uploaded_file)
+        with st.spinner("Validando y procesando archivo..."):
+            try:
+                # Primera lectura: detectar dónde está el encabezado
+                df_temp = pd.read_excel(uploaded_file, header=None)
+
+                # Detectar la fila del encabezado usando la función existente
+                fila_encabezado = detectar_fila_encabezado(df_temp)
+                
+                if fila_encabezado is None:
+                    st.warning("⚠️ No se pudo detectar automáticamente la fila del encabezado. Usando fila 7 por defecto.")
+                    fila_encabezado = 8
+                else:
+                    st.info(f"📍 Encabezado detectado en la fila {fila_encabezado + 1}")
+                
+                # Reiniciar el archivo y leer con el encabezado correcto
+                uploaded_file.seek(0)
+                df_usuario = pd.read_excel(uploaded_file, header=fila_encabezado)
+
+            except Exception as e:
+                st.error(f"❌ Error al leer el archivo: {str(e)}")
+                st.stop()
+            
+            # Validar y mapear columnas
+            df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
+            
+            if not exito_mapeo:
+                st.error(mensaje_mapeo)
+                st.info(""" 
+                        El archivo de Excel debe contener exactamente estas columnas:
+                        - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN, HORAS PROGRESIVO
+                        """)
+                st.stop()
+            
+            st.success(mensaje_mapeo)
+            
+            # Convertir el DataFrame mapeado a un objeto BytesIO para pasarlo a procesar_excel_inicial
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_formateado.to_excel(writer, index=False, sheet_name='Sheet1')
+            output.seek(0)
+            
+            # Procesar el archivo ya mapeado
+            df_procesado, exito, mensaje = procesar_excel_inicial(output)
             
             if exito:
                 st.session_state.df_procesado = df_procesado
