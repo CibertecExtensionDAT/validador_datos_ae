@@ -1209,7 +1209,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         st.download_button(
             label="📥 Descargar Reportes (ZIP)",
             data=zip_buffer,
-            file_name=f"Reportes_{nombre_colegio}_{tipo_archivo}.zip",
+            file_name=f"Resultados_{nombre_colegio}_{tipo_archivo}.zip",
             mime="application/zip",
             use_container_width=True
         )
@@ -2419,7 +2419,7 @@ def generar_todos_certificados():
 st.title("📊 Sistema de Validación de Archivos")
 
 # Crear tabs principales
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador General", "⚖️ Comparador de Evaluadores", "📑 Generador de Reportes PDF", "🎓 Generador de Certificados PDF con Plantillas Automáticas"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador General", "⚖️ Comparador de Evaluadores", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF con Plantillas Automáticas"])
 
 # ================================================
 # TAB 1: VALIDADOR GENERAL
@@ -4648,7 +4648,7 @@ with tab2:
 # TAB 3: Generar Reporte PDF
 # ================================================
 with tab3:
-    st.markdown("### 📄 Generación de Reportes PDF por Grado y Sección")
+    st.markdown("### 📄 Generador de Resultados PDF")
     st.info("""
     📌 **Instrucciones:**
     - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx`
