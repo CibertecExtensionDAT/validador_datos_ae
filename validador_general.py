@@ -4985,6 +4985,14 @@ with tab4:
             st.session_state.tipo_certificado_seleccionado = tipo_certificado
         
         with col2:
+            st.markdown("""
+                <style>
+                    div[data-testid="stCheckbox"] {
+                        padding-top: 1.3rem;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
             usar_marca_agua = st.checkbox(
                 "Incluir marca de agua",
                 value=False,
