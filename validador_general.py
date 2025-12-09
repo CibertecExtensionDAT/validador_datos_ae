@@ -100,6 +100,12 @@ if "tab3_tipo_archivo" not in st.session_state:
 if "tab3_reset_counter" not in st.session_state:
     st.session_state.tab3_reset_counter = 0
 
+# Tab04
+if 'tipo_certificado_seleccionado' not in st.session_state:
+    st.session_state.tipo_certificado_seleccionado = None
+if 'usar_marca_agua_seleccionado' not in st.session_state:
+    st.session_state.usar_marca_agua_seleccionado = False
+
 # Estados de Certificados
 if 'df_procesado' not in st.session_state:
     st.session_state.df_procesado = None
@@ -1837,12 +1843,22 @@ def cargar_plantillas():
         return None
 
 # Función para clasificar estudiantes por criterios
-def clasificar_estudiantes_por_nota(df, nombre_archivo):
+def clasificar_estudiantes_por_nota(df, tipo_certificado):
+    """
+    Clasifica estudiantes según el tipo de certificado seleccionado.
+    
+    Args:
+        df: DataFrame con los datos de estudiantes
+        tipo_certificado: "Progresivo" o "Normal (por notas)"
+    
+    Returns:
+        dict con grupos de estudiantes clasificados
+    """
     grupos = {
         'grupo_1': pd.DataFrame(),  # Progresivo
         'grupo_2': pd.DataFrame(),  # Nota < 12.5 / Participación
-        'grupo_3': pd.DataFrame(),  # Nota ≥ 12.5 y Grado = v1
-        'grupo_4': pd.DataFrame()   # Nota ≥ 12.5 y Grado = v2
+        'grupo_3': pd.DataFrame(),  # Nota ≥ 12.5 y Grado = 1P-3P
+        'grupo_4': pd.DataFrame()   # Nota ≥ 12.5 y Grado = 4P-5S
     }
 
     if 'nota final' not in df.columns:
@@ -1853,15 +1869,12 @@ def clasificar_estudiantes_por_nota(df, nombre_archivo):
         st.error("❌ No se encontró la columna 'GRADO' en el DataFrame")
         return None
 
-    # Verificar si el archivo empieza con "P"
-    archivo_empieza_con_p = nombre_archivo.upper().startswith('P')
-
-    if archivo_empieza_con_p:
-        # Si el archivo empieza con "P", todos los estudiantes van al grupo 1 (Progresivo)
+    # Verificar si el tipo de certificado es Progresivo (Grupo1)
+    if tipo_certificado == "Progresivo":
         grupos['grupo_1'] = df.copy()
-        st.info(f"📋 **Archivo detectado con prefijo 'P'**: Todos los certificados usarán el formato Progresivo")
+        st.info(f"📋 **Modo Progresivo seleccionado**: Todos los certificados usarán el formato Progresivo")
 
-    else:
+    else:  # "Normal (por notas)"
         df['nota_final_num'] = pd.to_numeric(df['nota final'], errors='coerce')
 
         # Grupo 2: Nota < 12.5 - Participación
@@ -1873,6 +1886,8 @@ def clasificar_estudiantes_por_nota(df, nombre_archivo):
         grupos['grupo_3'] = df_nota_alta[df_nota_alta['grado'].str.lower().str.strip().isin(['1p', '2p', '3p'])].copy()
         grupos['grupo_4'] = df_nota_alta[
             df_nota_alta['grado'].str.lower().str.strip().isin(['4p', '5p', '6p', '1s', '2s', '3s', '4s', '5s'])].copy()
+        
+        st.info(f"📋 **Modo Normal seleccionado**: Certificados según nota (aprobado/participación)")
 
     return grupos
 
@@ -1882,6 +1897,10 @@ def validar_y_mapear_columnas(df):
     Valida que el DataFrame tenga las columnas esperadas del usuario y las mapea
     a los nombres que espera procesar_excel_inicial.
     
+    Args:
+        df: DataFrame a validar
+        tipo_certificado: "Progresivo" o "Normal (por notas)". Si es None, no valida HORAS PROGRESIVO.
+    
     Retorna: (df_mapeado, exito, mensaje)
     """
     # Columnas esperadas del archivo del usuario
@@ -1889,7 +1908,7 @@ def validar_y_mapear_columnas(df):
         "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", 
         "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", 
         "P4 4PTOS.", "P5 4PTOS.", "NOTA EVALUADOR", "NOTA FINAL", "OBSERVADOS", 
-        "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+        "ESTATUS", "NUMERACIÓN"
     ]
     
     # Normalizar nombres de columnas del DataFrame (strip espacios)
@@ -1898,8 +1917,16 @@ def validar_y_mapear_columnas(df):
     # Verificar que todas las columnas esperadas estén presentes
     columnas_faltantes = [col for col in columnas_esperadas if col not in df.columns]
     
+    # Solo validar HORAS PROGRESIVO si el tipo es "Progresivo"
+    requiere_horas_progresivo = tipo_certificado == "Progresivo"
+    
+    if requiere_horas_progresivo and "HORAS PROGRESIVO" not in df.columns:
+        columnas_faltantes.append("HORAS PROGRESIVO")
+    
     if columnas_faltantes:
         mensaje_error = f"❌ El archivo no tiene las columnas requeridas. Faltan: {', '.join(columnas_faltantes)}"
+        if requiere_horas_progresivo and "HORAS PROGRESIVO" in columnas_faltantes:
+            mensaje_error += "\n\n💡 Nota: La columna 'HORAS PROGRESIVO' es requerida cuando se selecciona el tipo 'Progresivo'."
         return None, False, mensaje_error
     
     # Mapeo de columnas del usuario a las que espera la función
@@ -1917,26 +1944,46 @@ def validar_y_mapear_columnas(df):
         "NOTA FINAL": "nota final",
         "OBSERVADOS": "observación sobre nota desaprobatoria",
         "ESTATUS": "status",
-        "NUMERACIÓN": "numeración",
-        "HORAS PROGRESIVO": "horas_progresivo"
+        "NUMERACIÓN": "numeración"
     }
-    
-    # Seleccionar solo las columnas que necesitamos y renombrarlas
-    columnas_a_mantener = list(mapeo_columnas.keys())
-    df_filtrado = df[columnas_a_mantener].copy()
 
     orden_final = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO",
         "NOTA LABORATORIO", "¿ASISTIÓ?", "NOTA EVALUADOR", "NOTA FINAL",
-        "OBSERVADOS", "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+        "OBSERVADOS", "ESTATUS", "NUMERACIÓN"
     ]
+
+    # Agregar HORAS PROGRESIVO al mapeo y orden si existe en el DataFrame
+    tiene_horas_progresivo = "HORAS PROGRESIVO" in df.columns
+    if tiene_horas_progresivo:
+        mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
+        orden_final.append("HORAS PROGRESIVO")
+    
+    # Seleccionar solo las columnas que necesitamos y renombrarlas
+    columnas_a_mantener = [col for col in orden_final if col in df.columns]
+    df_filtrado = df[columnas_a_mantener].copy()
+    
+    # Si no tiene HORAS PROGRESIVO pero es necesaria, crear columna vacía
+    if not tiene_horas_progresivo and not requiere_horas_progresivo:
+        # Para tipos no progresivos, agregar columna vacía para mantener compatibilidad
+        df_filtrado["HORAS PROGRESIVO"] = ""
+        orden_final.append("HORAS PROGRESIVO")
+    
+    # Reordenar columnas
     df_filtrado = df_filtrado[orden_final]
 
     # Crear 10 filas vacías con las mismas columnas
     filas_vacias = pd.DataFrame(columns=df_filtrado.columns, index=range(10))
 
     # Agregar una fila con los nombres de columnas mapeados (la que será el encabezado)
-    nombres_mapeados = [mapeo_columnas[col] for col in orden_final]
+    # Actualizar mapeo_columnas con horas_progresivo si existe
+    if tiene_horas_progresivo:
+        mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
+    elif "HORAS PROGRESIVO" in orden_final:
+        # Si se agregó columna vacía, también agregar al mapeo
+        mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
+    
+    nombres_mapeados = [mapeo_columnas.get(col, col.lower()) for col in orden_final]
     fila_encabezado = pd.DataFrame([nombres_mapeados], columns=df_filtrado.columns)
     
     # Concatenar: 10 filas vacías + fila de encabezado + datos
@@ -2096,9 +2143,9 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
     estudiantes_base, total_estudiantes, styles_config_by_template):
     certificados_generados = 0
 
-    # Aplicar marca de agua si la segunda letra es 'I' y si esta aprobado
-    nombre_archivo = st.session_state.get('nombre_archivo', '')
-    aplicar_marca_agua = len(nombre_archivo) >= 2 and nombre_archivo[1].upper() == 'I' and plantilla_key != 'fondo_2'
+    # Aplicar marca de agua si el usuario lo seleccionó y no es certificado de participación (fondo_2)
+    usar_marca_agua = st.session_state.get('usar_marca_agua_seleccionado', False)
+    aplicar_marca_agua = usar_marca_agua and plantilla_key != 'fondo_2'
     
     # Ruta a la marca de agua
     watermark_path = os.path.join("watermarks", "marca_agua.pdf")
@@ -4893,19 +4940,18 @@ with tab3:
 # TAB 4: Generador de Certificados
 # ================================================
 with tab4:
-    st.markdown("## 🎓 Generador de Certificados PDF con Plantillas Automáticas")
+    st.markdown("### 🎓 Generador de Certificados PDF con Plantillas Automáticas")
     st.info("""
-    📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx`
-    - Se generarán archivos comprimidos con todos los certificados correspondientes.
-    - Si el archivo empieza con "P", todos los estudiantes van al grupo 1 (Progresivo).
-    - Si en el archivo la segunda letra es 'I' y está aprobado (>= 12.5), se aplicará la marca de agua.
-    - Si el alumno está desaprobado, el certificado será de Participación.
+    📌 **INSTRUCCIONES:**
+    - Sube un archivo **OK** con las columnas requeridas
+    - Selecciona el tipo de certificado que deseas generar
+    - Elige si deseas incluir marca de agua en los certificados
+    - Se generarán archivos comprimidos con todos los certificados correspondientes
             
     ⚠️ **IMPORTANTE:** 
-    - Las columnas deben ser: "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", "P4 4PTOS.", "P5 4PTOS.", "NOTA EVALUADOR", "NOTA FINAL", "OBSERVADOS", "ESTATUS", "NUMERACIÓN", "HORAS PROGRESIVO"
+    - **Columnas base requeridas:** NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
+    - **Columna HORAS PROGRESIVO:** Solo es REQUERIDA cuando se selecciona el tipo "Progresivo". Para certificados normales, esta columna es opcional.
     - La columna "NOTA FINAL" debe estar completa (sin valores vacíos).
-    - La única columna agregada **manualmente** debe ser **"HORAS PROGRESIVO"** con su valor correspondiente (El archivo OK no contiene esta columna normalmente), si no está completa se imprimirán con ese campo vacío.
     """)
 
     # Variable de estado para controlar el procesamineto del archivo
@@ -4914,7 +4960,49 @@ with tab4:
 
     # Preprocesamiento del Excel
     st.markdown("### 📤 Subir y procesar archivo Excel")
+
+    # Estados para las opciones de certificados
+    if 'tipo_certificado_seleccionado' not in st.session_state:
+        st.session_state.tipo_certificado_seleccionado = None
+    if 'usar_marca_agua_seleccionado' not in st.session_state:
+        st.session_state.usar_marca_agua_seleccionado = False
+
     uploaded_file = st.file_uploader("Selecciona un archivo Excel", type=["xlsx"])
+
+    # Selectores de opciones (solo se muestran si hay un archivo cargado)
+    if uploaded_file:
+        st.markdown("### ⚙️ Configuración de certificados")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            tipo_certificado = st.selectbox(
+                "📋 Tipo de certificado",
+                options=["Progresivo", "Normal (por notas)"],
+                help="**Progresivo:** Todos los estudiantes reciben certificado.\n\n**Normal:** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)",
+                key="select_tipo_certificado"
+            )
+            st.session_state.tipo_certificado_seleccionado = tipo_certificado
+        
+        with col2:
+            usar_marca_agua = st.checkbox(
+                "Incluir marca de agua",
+                value=False,
+                help="Agrega marca de agua 'PRELIMINAR' a los certificados generados",
+                key="check_marca_agua"
+            )
+            st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
+        
+        # Mostrar información según el tipo seleccionado
+        if tipo_certificado == "Progresivo":
+            st.success("ℹ️ **Modo Progresivo:** Todos los estudiantes recibirán certificados progresivos")
+        else:
+            st.info("ℹ️ **Modo Normal:** Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda. Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.")
+        
+        if usar_marca_agua:
+            st.warning("⚠️ Los certificados incluirán la marca de agua 'PRELIMINAR'")
+        
+        st.markdown("---")
 
     if uploaded_file and not st.session_state.archivo_procesado:
         st.markdown("### 📊 Vista previa del archivo original")
@@ -4945,15 +5033,30 @@ with tab4:
                 st.error(f"❌ Error al leer el archivo: {str(e)}")
                 st.stop()
             
+            # Obtener el tipo de certificado seleccionado
+            tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Normal (por notas)')
+
             # Validar y mapear columnas
             df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
             
             if not exito_mapeo:
                 st.error(mensaje_mapeo)
-                st.info(""" 
-                        El archivo de Excel debe contener exactamente estas columnas:
-                        - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN, HORAS PROGRESIVO
-                        """)
+                
+                # Mensaje de ayuda ajustado según el tipo
+                if tipo_certificado_para_validar == "Progresivo":
+                    st.info(""" 
+                            El archivo de Excel debe contener exactamente estas columnas:
+                            - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN, HORAS PROGRESIVO
+                            
+                            ⚠️ Nota: La columna 'HORAS PROGRESIVO' es obligatoria para certificados Progresivos.
+                            """)
+                else:
+                    st.info(""" 
+                            El archivo de Excel debe contener estas columnas base:
+                            - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
+                            
+                            ℹ️ Nota: La columna 'HORAS PROGRESIVO' no es necesaria para certificados Normales.
+                            """)
                 st.stop()
             
             st.success(mensaje_mapeo)
@@ -4985,10 +5088,44 @@ with tab4:
                 # Cargar plantillas automáticamente
                 st.session_state.plantillas = cargar_plantillas()
                 
-                # Clasificar estudiantes automáticamente
-                nombre_archivo = st.session_state.nombre_archivo
-                st.session_state.grupos = clasificar_estudiantes_por_nota(st.session_state.df_procesado, nombre_archivo)
+                # Clasificar estudiantes automáticamente usando el tipo seleccionado
+                tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Normal (por notas)')
+                st.session_state.grupos = clasificar_estudiantes_por_nota(
+                    st.session_state.df_procesado, 
+                    tipo_certificado_actual
+                )
                 
+                # Mostrar preview de certificados que se generarán
+                if st.session_state.grupos:
+                    st.markdown("### 📋 Preview de certificados a generar")
+                    
+                    col_prev1, col_prev2, col_prev3, col_prev4 = st.columns(4)
+                    
+                    with col_prev1:
+                        cant_progresivos = len(st.session_state.grupos.get('grupo_1', pd.DataFrame()))
+                        if cant_progresivos > 0:
+                            st.metric("🎓 Progresivos", cant_progresivos)
+                    
+                    with col_prev2:
+                        cant_participacion = len(st.session_state.grupos.get('grupo_2', pd.DataFrame()))
+                        if cant_participacion > 0:
+                            st.metric("📜 Participación", cant_participacion)
+                    
+                    with col_prev3:
+                        cant_1p3p = len(st.session_state.grupos.get('grupo_3', pd.DataFrame()))
+                        if cant_1p3p > 0:
+                            st.metric("✅ 1P-3P Aprobados", cant_1p3p)
+                    
+                    with col_prev4:
+                        cant_4p5s = len(st.session_state.grupos.get('grupo_4', pd.DataFrame()))
+                        if cant_4p5s > 0:
+                            st.metric("✅ 4P-5S Aprobados", cant_4p5s)
+                    
+                    total_certificados = cant_progresivos + cant_participacion + cant_1p3p + cant_4p5s
+                    st.info(f"🎯 **Total de certificados a generar:** {total_certificados}")
+                    
+                    st.markdown("---")
+
                 # Generar certificados automáticamente
                 generar_todos_certificados()
 
@@ -5005,7 +5142,9 @@ with tab4:
         nombre_archivo = st.session_state.get('nombre_archivo', '')
         nombre_base = os.path.splitext(nombre_archivo)[0] if nombre_archivo else "CERTIFICADOS"
         
-        if len(nombre_base) >= 2 and nombre_base[1].upper() == 'P':
+        # Agregar sufijo si tiene marca de agua
+        usar_marca_agua = st.session_state.get('usar_marca_agua_seleccionado', False)
+        if usar_marca_agua:
             zip_filename = f"{nombre_base}_PRELIMINAR.zip"
         else:
             zip_filename = f"{nombre_base}.zip"
@@ -5016,6 +5155,17 @@ with tab4:
             file_name=zip_filename,
             mime="application/zip"
         )
+        
+        # Botón para generar nuevos certificados con diferentes opciones
+        st.markdown("---")
+        if st.button("🔄 Generar certificados con nuevas opciones", use_container_width=True, key="btn_regenerar_certificados"):
+            st.session_state.archivo_procesado = False
+            st.session_state.grupos = None
+            st.session_state.plantillas = None
+            st.session_state.certificados_generados = False
+            st.session_state.zip_buffer = None
+            st.rerun()
+        
     elif not uploaded_file:
         st.info("👆 Sube un archivo Excel para generar los certificados automáticamente.")
         # Resetear el estado
