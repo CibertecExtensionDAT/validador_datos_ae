@@ -1895,7 +1895,7 @@ def clasificar_estudiantes_por_nota(df, tipo_certificado):
     return grupos
 
 # Función Tab4
-def validar_y_mapear_columnas(df):
+def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
     """
     Valida que el DataFrame tenga las columnas esperadas del usuario y las mapea
     a los nombres que espera procesar_excel_inicial.
@@ -4702,7 +4702,9 @@ with tab3:
     st.markdown("## 📑 Generador de Resultados PDF")
     st.info("""
     📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
+    - Sube un archivo **OK** con formato: 
+        - `{NombreColegio}_1P-3P_OK.xlsx`
+        - `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
     - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
     - Cada PDF contendrá la lista completa de estudiantes con sus notas
     - **IMPORTANTE:** Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
@@ -4947,7 +4949,9 @@ with tab4:
     st.markdown("## 🎓 Generador de Certificados PDF")
     st.info("""
     📌 **INSTRUCCIONES:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
+    - Sube un archivo **OK** con formato: 
+        - `{NombreColegio}_1P-3P_OK.xlsx`
+        - `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
     - Selecciona el tipo de certificado que deseas generar
     - Elige si deseas incluir marca de agua en los certificados
     - Se generarán archivos comprimidos con todos los certificados correspondientes
@@ -4987,14 +4991,31 @@ with tab4:
         col1, col2 = st.columns(2)
         
         with col1:
-            tipo_certificado = st.selectbox(
+            # Mapeo de nombres visuales a valores internos
+            opciones_display = {
+                "Regulares (diplomados, certificados y constancias)": "Regular",
+                "Progresivo": "Progresivo"
+            }
+            
+            # Obtener el valor visual actual basado en el valor interno guardado
+            valor_actual = st.session_state.tipo_certificado_seleccionado
+            if valor_actual:
+                # Invertir el diccionario para encontrar la clave por valor
+                display_actual = [k for k, v in opciones_display.items() if v == valor_actual][0]
+            else:
+                display_actual = list(opciones_display.keys())[0]
+            
+            tipo_certificado_display = st.selectbox(
                 "📋 Seleccionar la plantilla automática",
-                options=["Regular", "Progresivo"],
-                help="**Regular:** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)\n\n**Progresivo:** Todos los estudiantes reciben certificado.",
+                options=list(opciones_display.keys()),
+                index=list(opciones_display.keys()).index(display_actual) if valor_actual else 0,
+                help="**Regulares (diplomados, certificados y constancias):** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)\n\n**Progresivo:** Todos los estudiantes reciben certificado.",
                 key="select_tipo_certificado",
                 disabled=deshabilitar_opciones
             )
-            st.session_state.tipo_certificado_seleccionado = tipo_certificado
+            # Guardar el valor interno, no el visual
+            st.session_state.tipo_certificado_seleccionado = opciones_display[tipo_certificado_display]
+
         
         with col2:
             st.markdown("""
@@ -5015,8 +5036,13 @@ with tab4:
             st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
         
         # Mostrar información según el tipo seleccionado
-        if tipo_certificado == "Regular":
-            st.info("ℹ️ **Modo Regular:** Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda. Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.")
+        tipo_certificado_actual = st.session_state.tipo_certificado_seleccionado
+        if tipo_certificado_actual == "Regular":
+            st.info("""
+                    ℹ️ **Modo Regulares (diplomados, certificados y constancias):** 
+                    - Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda.
+                    - Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.
+                    """)
         else:
             st.success("ℹ️ **Modo Progresivo:** Todos los estudiantes recibirán certificados progresivos")
         
@@ -5055,7 +5081,7 @@ with tab4:
                     tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
 
                     # Validar y mapear columnas
-                    df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
+                    df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario, tipo_certificado_para_validar)
                     
                     if not exito_mapeo:
                         st.error(mensaje_mapeo)
