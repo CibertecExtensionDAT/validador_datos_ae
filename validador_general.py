@@ -106,6 +106,8 @@ if 'tipo_certificado_seleccionado' not in st.session_state:
     st.session_state.tipo_certificado_seleccionado = None
 if 'usar_marca_agua_seleccionado' not in st.session_state:
     st.session_state.usar_marca_agua_seleccionado = False
+if 'fecha_certificado_seleccionada' not in st.session_state:
+    st.session_state.fecha_certificado_seleccionada = datetime.now().date()
 if 'tab4_reset_counter' not in st.session_state:
     st.session_state.tab4_reset_counter = 0
 
@@ -2171,7 +2173,17 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
         try:
             nombre = str(row["nombre_certificado"]).strip().upper()
             curso = str(row["curso"]).strip().upper()
-            fecha = mes_en_espanol(datetime.today())
+
+            # Obtener la fecha seleccionada por el usuario desde session_state
+            fecha_seleccionada = st.session_state.get('fecha_certificado_seleccionada', datetime.now().date())
+            # Convertir date a datetime si es necesario
+            if isinstance(fecha_seleccionada, datetime):
+                fecha_para_certificado = fecha_seleccionada
+            else:
+                # Si es un objeto date, convertirlo a datetime
+                fecha_para_certificado = datetime.combine(fecha_seleccionada, datetime.min.time())
+            
+            fecha = mes_en_espanol(fecha_para_certificado)
             numero = (
                 str(row["numeración"]).strip()
                 if "numeración" in row and pd.notnull(row["numeración"])
@@ -5035,6 +5047,37 @@ with tab4:
             )
             st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
         
+        # Selector de fecha para los certificados
+        st.markdown("### 📅 Fecha de los certificados")
+        col_fecha1, col_fecha2 = st.columns([2, 1])
+        
+        with col_fecha1:
+            fecha_seleccionada = st.date_input(
+                "Selecciona la fecha de emisión",
+                value=st.session_state.fecha_certificado_seleccionada,
+                help="Esta fecha aparecerá en todos los certificados generados",
+                key="date_certificado",
+                disabled=deshabilitar_opciones,
+                format="DD/MM/YYYY"
+            )
+            st.session_state.fecha_certificado_seleccionada = fecha_seleccionada
+        
+        with col_fecha2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔄 Usar fecha de hoy", disabled=deshabilitar_opciones, use_container_width=True):
+                st.session_state.fecha_certificado_seleccionada = datetime.now().date()
+                st.rerun()
+        
+        # Mostrar la fecha formateada que se usará
+        from datetime import date
+        fecha_para_certificado = st.session_state.fecha_certificado_seleccionada
+        if isinstance(fecha_para_certificado, date):
+            fecha_dt = datetime.combine(fecha_para_certificado, datetime.min.time())
+        else:
+            fecha_dt = fecha_para_certificado
+        fecha_formateada = mes_en_espanol(fecha_dt)
+        st.info(f"📄 Los certificados mostrarán: **Lima, {fecha_formateada}**")
+        
         # Mostrar información según el tipo seleccionado
         tipo_certificado_actual = st.session_state.tipo_certificado_seleccionado
         if tipo_certificado_actual == "Regular":
@@ -5233,6 +5276,7 @@ with tab4:
             st.session_state.zip_buffer = None
             st.session_state.tipo_certificado_seleccionado = None 
             st.session_state.usar_marca_agua_seleccionado = False 
+            st.session_state.fecha_certificado_seleccionada = datetime.now().date()
             st.session_state.tab4_reset_counter += 1
             st.rerun()
         
