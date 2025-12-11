@@ -2,6 +2,7 @@
 # PASO 1: SUBIDA Y VALIDACIÓN DEL ARCHIVO 1
 # ===============================================
 import io
+import re
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -1083,7 +1084,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story = []
                 
                 # Header del contenido
-                story.append(Paragraph("NOMINA DE ALUMNOS", style_title))
+                story.append(Paragraph("NÓMINA DE ALUMNOS", style_title))
                 story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
                 story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
                 story.append(Paragraph(f"<b>Grado:</b> {grado} | <b>Sección:</b> {seccion}", style_subtitle))
@@ -1849,7 +1850,7 @@ def clasificar_estudiantes_por_nota(df, tipo_certificado):
     
     Args:
         df: DataFrame con los datos de estudiantes
-        tipo_certificado: "Progresivo" o "Normal (por notas)"
+        tipo_certificado: "Progresivo" o "Regular"
     
     Returns:
         dict con grupos de estudiantes clasificados
@@ -1874,7 +1875,7 @@ def clasificar_estudiantes_por_nota(df, tipo_certificado):
         grupos['grupo_1'] = df.copy()
         st.info(f"📋 **Modo Progresivo seleccionado**: Todos los certificados usarán el formato Progresivo")
 
-    else:  # "Normal (por notas)"
+    else:  # "Regular"
         df['nota_final_num'] = pd.to_numeric(df['nota final'], errors='coerce')
 
         # Grupo 2: Nota < 12.5 - Participación
@@ -1899,7 +1900,7 @@ def validar_y_mapear_columnas(df):
     
     Args:
         df: DataFrame a validar
-        tipo_certificado: "Progresivo" o "Normal (por notas)". Si es None, no valida HORAS PROGRESIVO.
+        tipo_certificado: "Progresivo" o "Regular". Si es None, no valida HORAS PROGRESIVO.
     
     Retorna: (df_mapeado, exito, mensaje)
     """
@@ -2466,7 +2467,7 @@ def generar_todos_certificados():
 st.title("📊 Sistema de Validación de Archivos")
 
 # Crear tabs principales
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador General", "⚖️ Comparador de Evaluadores", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF con Plantillas Automáticas"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador de Nóminas", "⚖️ Validador de Evaluaciones", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF"])
 
 # ================================================
 # TAB 1: VALIDADOR GENERAL
@@ -2475,7 +2476,7 @@ with tab1:
     # ================================================
     # INTERFAZ PRINCIPAL
     # ================================================
-    st.markdown("## 🎯 Validador de Archivos Escolares")
+    st.markdown("## 🔍 Validador de Nóminas")
     st.markdown("### Sistema de Homologación de Datos")
 
     # Mostrar stepper
@@ -3974,6 +3975,7 @@ with tab1:
 # TAB 2: COMPARADOR DE EVALUADORES
 # ================================================
 with tab2:
+    st.markdown("## ⚖️ Validador de Evaluaciones)")
     st.markdown("### Comparación de Archivos Evaluadores (Formato Certificados)")
     st.info("""
     📌 **Instrucciones:**
@@ -4670,9 +4672,9 @@ with tab2:
             col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
             with col_desc2:
                 st.download_button(
-                    label="📥 Descargar {NombreColegio}_OK_EVALUADOR_ESTATUS.xlsx",
+                    label="📥 Descargar {NombreColegio}_OK_EVALUADOR_REV.xlsx",
                     data=excel_data,
-                    file_name=f"{nombre_colegio_evaluador}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx",
+                    file_name=f"{nombre_colegio_evaluador}_4P-5S_OK_EVALUADOR_REV.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                     help="Descarga el archivo original con la columna ESTATUS completada según la nota final"
@@ -4695,10 +4697,10 @@ with tab2:
 # TAB 3: Generar Reporte PDF
 # ================================================
 with tab3:
-    st.markdown("### 📄 Generador de Resultados PDF")
+    st.markdown("## 📑 Generador de Resultados PDF")
     st.info("""
     📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_ESTATUS.xlsx`
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
     - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
     - Cada PDF contendrá la lista completa de estudiantes con sus notas
     - **IMPORTANTE:** Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
@@ -4727,7 +4729,7 @@ with tab3:
         if tipo_reporte == "1P-3P":
             patron_esperado = f"_{tipo_reporte}_OK.xlsx"
         else: # "4P-5S"
-            patron_esperado = f"_{tipo_reporte}_OK_EVALUADOR_ESTATUS.xlsx"
+            patron_esperado = f"_{tipo_reporte}_OK_EVALUADOR_REV.xlsx"
         
         if not nombre_archivo.endswith(patron_esperado):
             st.error(f"❌ Formato de archivo incorrecto")
@@ -4940,10 +4942,10 @@ with tab3:
 # TAB 4: Generador de Certificados
 # ================================================
 with tab4:
-    st.markdown("### 🎓 Generador de Certificados PDF con Plantillas Automáticas")
+    st.markdown("## 🎓 Generador de Certificados PDF")
     st.info("""
     📌 **INSTRUCCIONES:**
-    - Sube un archivo **OK** con las columnas requeridas
+    - Sube un archivo **OK** con formato: `{NombreColegio}_1P-3P_OK.xlsx` o `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
     - Selecciona el tipo de certificado que deseas generar
     - Elige si deseas incluir marca de agua en los certificados
     - Se generarán archivos comprimidos con todos los certificados correspondientes
@@ -4977,9 +4979,9 @@ with tab4:
         
         with col1:
             tipo_certificado = st.selectbox(
-                "📋 Tipo de certificado",
-                options=["Progresivo", "Normal (por notas)"],
-                help="**Progresivo:** Todos los estudiantes reciben certificado.\n\n**Normal:** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)",
+                "📋 Seleccionar la plantilla automática",
+                options=["Regular", "Progresivo"],
+                help="**Regular:** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)\n\n**Progresivo:** Todos los estudiantes reciben certificado.",
                 key="select_tipo_certificado"
             )
             st.session_state.tipo_certificado_seleccionado = tipo_certificado
@@ -5002,10 +5004,10 @@ with tab4:
             st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
         
         # Mostrar información según el tipo seleccionado
-        if tipo_certificado == "Progresivo":
-            st.success("ℹ️ **Modo Progresivo:** Todos los estudiantes recibirán certificados progresivos")
-        else:
+        if tipo_certificado == "Regular":
             st.info("ℹ️ **Modo Normal:** Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda. Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.")
+        else:
+            st.success("ℹ️ **Modo Progresivo:** Todos los estudiantes recibirán certificados progresivos")
         
         if usar_marca_agua:
             st.warning("⚠️ Los certificados incluirán la marca de agua 'PRELIMINAR'")
@@ -5042,7 +5044,7 @@ with tab4:
                 st.stop()
             
             # Obtener el tipo de certificado seleccionado
-            tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Normal (por notas)')
+            tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
 
             # Validar y mapear columnas
             df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
@@ -5097,7 +5099,7 @@ with tab4:
                 st.session_state.plantillas = cargar_plantillas()
                 
                 # Clasificar estudiantes automáticamente usando el tipo seleccionado
-                tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Normal (por notas)')
+                tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
                 st.session_state.grupos = clasificar_estudiantes_por_nota(
                     st.session_state.df_procesado, 
                     tipo_certificado_actual
@@ -5149,13 +5151,29 @@ with tab4:
     if st.session_state.certificados_generados and st.session_state.zip_buffer:
         nombre_archivo = st.session_state.get('nombre_archivo', '')
         nombre_base = os.path.splitext(nombre_archivo)[0] if nombre_archivo else "CERTIFICADOS"
+
+        # Extraer solo nombre del colegio y rango de grados (1P-3P o 4P-5S)
+        import re
+        # Buscar patrón: {NombreColegio}_{1P-3P o 4P-5S}_...
+        match = re.match(r'(.+?)_(1P-3P|4P-5S)', nombre_base)
+        if match:
+            nombre_colegio = match.group(1)
+            rango_grados = match.group(2)
+            nombre_limpio = f"{nombre_colegio}_{rango_grados}"
+        else:
+            # Si no se encuentra el patrón, usar el nombre completo
+            nombre_limpio = nombre_base
         
+        # Obtener el tipo de certificado seleccionado
+        tipo_certificado = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
+        prefijo_tipo = "Regulares" if tipo_certificado == "Regular" else "Progresivos"
+
         # Agregar sufijo si tiene marca de agua
         usar_marca_agua = st.session_state.get('usar_marca_agua_seleccionado', False)
         if usar_marca_agua:
-            zip_filename = f"{nombre_base}_PRELIMINAR.zip"
+            zip_filename = f"{prefijo_tipo}_{nombre_limpio}_Preliminar.zip"
         else:
-            zip_filename = f"{nombre_base}.zip"
+            zip_filename = f"{prefijo_tipo}_{nombre_limpio}.zip"
         
         st.download_button(
             label="📥 Descargar todos los certificados (ZIP)",
