@@ -3977,7 +3977,7 @@ with tab1:
 # TAB 2: COMPARADOR DE EVALUADORES
 # ================================================
 with tab2:
-    st.markdown("## ⚖️ Validador de Evaluaciones)")
+    st.markdown("## ⚖️ Validador de Evaluaciones")
     st.markdown("### Comparación de Archivos Evaluadores (Formato Certificados)")
     st.info("""
     📌 **Instrucciones:**
