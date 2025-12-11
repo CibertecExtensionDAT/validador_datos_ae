@@ -106,6 +106,8 @@ if 'tipo_certificado_seleccionado' not in st.session_state:
     st.session_state.tipo_certificado_seleccionado = None
 if 'usar_marca_agua_seleccionado' not in st.session_state:
     st.session_state.usar_marca_agua_seleccionado = False
+if 'tab4_reset_counter' not in st.session_state:
+    st.session_state.tab4_reset_counter = 0
 
 # Estados de Certificados
 if 'df_procesado' not in st.session_state:
@@ -4969,12 +4971,19 @@ with tab4:
     if 'usar_marca_agua_seleccionado' not in st.session_state:
         st.session_state.usar_marca_agua_seleccionado = False
 
-    uploaded_file = st.file_uploader("Selecciona un archivo Excel", type=["xlsx"])
+    uploaded_file = st.file_uploader(
+        "Selecciona un archivo Excel", 
+        type=["xlsx"],
+        key=f"tab4_uploader_{st.session_state.tab4_reset_counter}"
+    )
 
     # Selectores de opciones (solo se muestran si hay un archivo cargado)
     if uploaded_file:
         st.markdown("### ⚙️ Configuración de certificados")
         
+        # Determinar si deshabilitar las opciones (cuando ya se generaron los certificados)
+        deshabilitar_opciones = st.session_state.certificados_generados
+
         col1, col2 = st.columns(2)
         
         with col1:
@@ -4982,7 +4991,8 @@ with tab4:
                 "📋 Seleccionar la plantilla automática",
                 options=["Regular", "Progresivo"],
                 help="**Regular:** Se genera según nota de aprobación (≥12.5 = aprobado, <12.5 = participación)\n\n**Progresivo:** Todos los estudiantes reciben certificado.",
-                key="select_tipo_certificado"
+                key="select_tipo_certificado",
+                disabled=deshabilitar_opciones
             )
             st.session_state.tipo_certificado_seleccionado = tipo_certificado
         
@@ -4997,152 +5007,155 @@ with tab4:
 
             usar_marca_agua = st.checkbox(
                 "Incluir marca de agua",
-                value=False,
+                value=st.session_state.usar_marca_agua_seleccionado,
                 help="Agrega marca de agua 'PRELIMINAR' a los certificados generados",
-                key="check_marca_agua"
+                key="check_marca_agua",
+                disabled=deshabilitar_opciones
             )
             st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
         
         # Mostrar información según el tipo seleccionado
         if tipo_certificado == "Regular":
-            st.info("ℹ️ **Modo Normal:** Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda. Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.")
+            st.info("ℹ️ **Modo Regular:** Se generarán certificados de aprobación (nota ≥12.5) o participación (nota <12.5) según corresponda. Los estudiantes de 1P-3P y 4P-5S usarán plantillas diferentes.")
         else:
             st.success("ℹ️ **Modo Progresivo:** Todos los estudiantes recibirán certificados progresivos")
         
         if usar_marca_agua:
             st.warning("⚠️ Los certificados incluirán la marca de agua 'PRELIMINAR'")
         
+        
         st.markdown("---")
 
     if uploaded_file and not st.session_state.archivo_procesado:
-        st.markdown("### 📊 Vista previa del archivo original")
-        df_original = pd.read_excel(uploaded_file)
-        st.write(f"**Dimensiones originales:** {df_original.shape[0]} filas x {df_original.shape[1]} columnas")
-        st.write(f"**Nombre del archivo:** {uploaded_file.name}")
-        #st.dataframe(df_original.head(15))
+        if st.button("🚀 Procesar archivo y generar certificados", type="primary", use_container_width=True, key="btn_procesar_certificados"):
+                with st.spinner("Validando y procesando archivo..."):
+                    try:
+                        # Primera lectura: detectar dónde está el encabezado
+                        uploaded_file.seek(0)
+                        df_temp = pd.read_excel(uploaded_file, header=None)
 
-        with st.spinner("Validando y procesando archivo..."):
-            try:
-                # Primera lectura: detectar dónde está el encabezado
-                df_temp = pd.read_excel(uploaded_file, header=None)
+                        # Detectar la fila del encabezado usando la función existente
+                        fila_encabezado = detectar_fila_encabezado(df_temp)
+                        
+                        if fila_encabezado is None:
+                            st.warning("⚠️ No se pudo detectar automáticamente la fila del encabezado. Usando fila 7 por defecto.")
+                            fila_encabezado = 8
+                        else:
+                            st.info(f"📍 Encabezado detectado en la fila {fila_encabezado + 1}")
+                        
+                        # Reiniciar el archivo y leer con el encabezado correcto
+                        uploaded_file.seek(0)
+                        df_usuario = pd.read_excel(uploaded_file, header=fila_encabezado)
 
-                # Detectar la fila del encabezado usando la función existente
-                fila_encabezado = detectar_fila_encabezado(df_temp)
-                
-                if fila_encabezado is None:
-                    st.warning("⚠️ No se pudo detectar automáticamente la fila del encabezado. Usando fila 7 por defecto.")
-                    fila_encabezado = 8
-                else:
-                    st.info(f"📍 Encabezado detectado en la fila {fila_encabezado + 1}")
-                
-                # Reiniciar el archivo y leer con el encabezado correcto
-                uploaded_file.seek(0)
-                df_usuario = pd.read_excel(uploaded_file, header=fila_encabezado)
+                    except Exception as e:
+                        st.error(f"❌ Error al leer el archivo: {str(e)}")
+                        st.stop()
+                    
+                    # Obtener el tipo de certificado seleccionado
+                    tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
 
-            except Exception as e:
-                st.error(f"❌ Error al leer el archivo: {str(e)}")
-                st.stop()
-            
-            # Obtener el tipo de certificado seleccionado
-            tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
-
-            # Validar y mapear columnas
-            df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
-            
-            if not exito_mapeo:
-                st.error(mensaje_mapeo)
-                
-                # Mensaje de ayuda ajustado según el tipo
-                if tipo_certificado_para_validar == "Progresivo":
-                    st.info(""" 
-                            El archivo de Excel debe contener exactamente estas columnas:
-                            - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN, HORAS PROGRESIVO
+                    # Validar y mapear columnas
+                    df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario)
+                    
+                    if not exito_mapeo:
+                        st.error(mensaje_mapeo)
+                        
+                        # Mensaje de ayuda ajustado según el tipo
+                        if tipo_certificado_para_validar == "Progresivo":
+                            st.info(""" 
+                                    El archivo de Excel debe contener exactamente estas columnas:
+                                    - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN, HORAS PROGRESIVO
+                                    
+                                    ⚠️ Nota: La columna 'HORAS PROGRESIVO' es obligatoria para certificados Progresivos.
+                                    """)
+                        else:
+                            st.info(""" 
+                                    El archivo de Excel debe contener estas columnas base:
+                                    - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
+                                    
+                                    ℹ️ Nota: La columna 'HORAS PROGRESIVO' no es necesaria para certificados Normales.
+                                    """)
+                        st.stop()
+                    
+                    st.success(mensaje_mapeo)
+                    
+                    # Convertir el DataFrame mapeado a un objeto BytesIO para pasarlo a procesar_excel_inicial
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_formateado.to_excel(writer, index=False, sheet_name='Sheet1')
+                    output.seek(0)
+                    
+                    # Procesar el archivo ya mapeado
+                    df_procesado, exito, mensaje = procesar_excel_inicial(output)
+                    
+                    if exito:
+                        st.session_state.df_procesado = df_procesado
+                        st.session_state.nombre_archivo = uploaded_file.name
+                        
+                        # Resetear estados cuando se procesa un nuevo archivo
+                        st.session_state.grupos = None
+                        st.session_state.plantillas = None
+                        st.session_state.certificados_generados = False
+                        st.session_state.zip_buffer = None
+                        
+                        st.success(mensaje)
+                        st.subheader("✅ Archivo procesado - Vista previa de datos limpios")
+                        st.write(f"**Dimensiones procesadas:** {df_procesado.shape[0]} filas x {df_procesado.shape[1]} columnas")
+                        
+                        df_mostrar = df_procesado.copy()
+                        df_mostrar.columns = df_mostrar.columns.str.upper()
+                        
+                        st.dataframe(df_mostrar, hide_index=True)
+                        
+                        # Cargar plantillas automáticamente
+                        st.session_state.plantillas = cargar_plantillas()
+                        
+                        # Clasificar estudiantes automáticamente usando el tipo seleccionado
+                        tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
+                        st.session_state.grupos = clasificar_estudiantes_por_nota(
+                            st.session_state.df_procesado, 
+                            tipo_certificado_actual
+                        )
+                        
+                        # Mostrar preview de certificados que se generarán
+                        if st.session_state.grupos:
+                            st.markdown("### 📋 Preview de certificados a generar")
                             
-                            ⚠️ Nota: La columna 'HORAS PROGRESIVO' es obligatoria para certificados Progresivos.
-                            """)
-                else:
-                    st.info(""" 
-                            El archivo de Excel debe contener estas columnas base:
-                            - NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
+                            col_prev1, col_prev2, col_prev3, col_prev4 = st.columns(4)
                             
-                            ℹ️ Nota: La columna 'HORAS PROGRESIVO' no es necesaria para certificados Normales.
-                            """)
-                st.stop()
-            
-            st.success(mensaje_mapeo)
-            
-            # Convertir el DataFrame mapeado a un objeto BytesIO para pasarlo a procesar_excel_inicial
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_formateado.to_excel(writer, index=False, sheet_name='Sheet1')
-            output.seek(0)
-            
-            # Procesar el archivo ya mapeado
-            df_procesado, exito, mensaje = procesar_excel_inicial(output)
-            
-            if exito:
-                st.session_state.df_procesado = df_procesado
-                st.session_state.nombre_archivo = uploaded_file.name
-                
-                # Resetear estados cuando se procesa un nuevo archivo
-                st.session_state.grupos = None
-                st.session_state.plantillas = None
-                st.session_state.certificados_generados = False
-                st.session_state.zip_buffer = None
-                
-                st.success(mensaje)
-                st.subheader("✅ Archivo procesado - Vista previa de datos limpios")
-                st.write(f"**Dimensiones procesadas:** {df_procesado.shape[0]} filas x {df_procesado.shape[1]} columnas")
-                st.dataframe(df_procesado)
-                
-                # Cargar plantillas automáticamente
-                st.session_state.plantillas = cargar_plantillas()
-                
-                # Clasificar estudiantes automáticamente usando el tipo seleccionado
-                tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
-                st.session_state.grupos = clasificar_estudiantes_por_nota(
-                    st.session_state.df_procesado, 
-                    tipo_certificado_actual
-                )
-                
-                # Mostrar preview de certificados que se generarán
-                if st.session_state.grupos:
-                    st.markdown("### 📋 Preview de certificados a generar")
-                    
-                    col_prev1, col_prev2, col_prev3, col_prev4 = st.columns(4)
-                    
-                    with col_prev1:
-                        cant_progresivos = len(st.session_state.grupos.get('grupo_1', pd.DataFrame()))
-                        if cant_progresivos > 0:
-                            st.metric("🎓 Progresivos", cant_progresivos)
-                    
-                    with col_prev2:
-                        cant_participacion = len(st.session_state.grupos.get('grupo_2', pd.DataFrame()))
-                        if cant_participacion > 0:
-                            st.metric("📜 Participación", cant_participacion)
-                    
-                    with col_prev3:
-                        cant_1p3p = len(st.session_state.grupos.get('grupo_3', pd.DataFrame()))
-                        if cant_1p3p > 0:
-                            st.metric("✅ 1P-3P Aprobados", cant_1p3p)
-                    
-                    with col_prev4:
-                        cant_4p5s = len(st.session_state.grupos.get('grupo_4', pd.DataFrame()))
-                        if cant_4p5s > 0:
-                            st.metric("✅ 4P-5S Aprobados", cant_4p5s)
-                    
-                    total_certificados = cant_progresivos + cant_participacion + cant_1p3p + cant_4p5s
-                    st.info(f"🎯 **Total de certificados a generar:** {total_certificados}")
-                    
-                    st.markdown("---")
+                            with col_prev1:
+                                cant_progresivos = len(st.session_state.grupos.get('grupo_1', pd.DataFrame()))
+                                if cant_progresivos > 0:
+                                    st.metric("🎓 Progresivos", cant_progresivos)
+                            
+                            with col_prev2:
+                                cant_participacion = len(st.session_state.grupos.get('grupo_2', pd.DataFrame()))
+                                if cant_participacion > 0:
+                                    st.metric("📜 Participación", cant_participacion)
+                            
+                            with col_prev3:
+                                cant_1p3p = len(st.session_state.grupos.get('grupo_3', pd.DataFrame()))
+                                if cant_1p3p > 0:
+                                    st.metric("✅ 1P-3P Aprobados", cant_1p3p)
+                            
+                            with col_prev4:
+                                cant_4p5s = len(st.session_state.grupos.get('grupo_4', pd.DataFrame()))
+                                if cant_4p5s > 0:
+                                    st.metric("✅ 4P-5S Aprobados", cant_4p5s)
+                            
+                            total_certificados = cant_progresivos + cant_participacion + cant_1p3p + cant_4p5s
+                            st.info(f"🎯 **Total de certificados a generar:** {total_certificados}")
+                            
+                            st.markdown("---")
 
-                # Generar certificados automáticamente
-                generar_todos_certificados()
+                        # Generar certificados automáticamente
+                        generar_todos_certificados()
 
-                # Variable de procesamiento activada
-                st.session_state.archivo_procesado = True
-            else:
-                st.error(mensaje)
+                        # Variable de procesamiento activada
+                        st.session_state.archivo_procesado = True
+                        #st.rerun()
+                    else:
+                        st.error(mensaje)
 
     elif uploaded_file and st.session_state.archivo_procesado:
         st.success("✅ Archivo ya procesado. Los certificados están listos para descargar.")
@@ -5184,12 +5197,17 @@ with tab4:
         
         # Botón para generar nuevos certificados con diferentes opciones
         st.markdown("---")
-        if st.button("🔄 Generar certificados con nuevas opciones", use_container_width=True, key="btn_regenerar_certificados"):
+        if st.button("🔄 Limpiar y Generar nuevos certificados", use_container_width=True, key="btn_regenerar_certificados"):
             st.session_state.archivo_procesado = False
+            st.session_state.df_procesado = None     
+            st.session_state.nombre_archivo = None   
             st.session_state.grupos = None
             st.session_state.plantillas = None
             st.session_state.certificados_generados = False
             st.session_state.zip_buffer = None
+            st.session_state.tipo_certificado_seleccionado = None 
+            st.session_state.usar_marca_agua_seleccionado = False 
+            st.session_state.tab4_reset_counter += 1
             st.rerun()
         
     elif not uploaded_file:
