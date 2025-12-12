@@ -1113,7 +1113,15 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 # Preparar datos de la tabla
                 grupo_df_sorted = grupo_df.sort_values(['PATERNO', 'MATERNO', 'NOMBRES'])
                 
-                # Crear datos de tabla
+                # CALCULAR ESTADÍSTICAS CON VALORES ORIGINALES (SIN REDONDEAR)
+                total_alumnos = len(grupo_df_sorted)
+                aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
+                desaprobados = total_alumnos - aprobados
+                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') == 20])
+                promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
+                promedio = round(promedio, 2)
+                
+                # CREAR TABLA CON NOTAS REDONDEADAS (SOLO PARA VISUALIZACIÓN)
                 datos_tabla = [['Nro.', 'Nombres', 'Apellido Paterno', 'Apellido Materno', 'Nota']]
                 
                 for i, (_, row) in enumerate(grupo_df_sorted.iterrows(), 1):
@@ -1123,7 +1131,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                         nota_float = float(nota_original)
                         nota_redondeada = int(round(nota_float))
                     except (ValueError, TypeError):
-                        nota_redondeada = nota_original  # Si no es numérico, mantener el valor original
+                        nota_redondeada = nota_original   # Si no es numérico, mantener el valor original
                     
                     datos_tabla.append([
                         str(i),
@@ -1216,7 +1224,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     
                     # Fecha a la IZQUIERDA
                     fecha_actual = datetime.now().strftime("%d/%m/%Y")
-                    texto_fecha = f"Fecha: {fecha_actual}"
+                    texto_fecha = f"Impreso: {fecha_actual}"
                     overlay_canvas.drawString(margen_izq, y_pie, texto_fecha)
                     
                     # Número de página a la DERECHA
