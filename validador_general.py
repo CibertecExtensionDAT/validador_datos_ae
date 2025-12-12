@@ -1011,6 +1011,34 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         canvas.drawString(x_logo, y_logo, "Alianza")
         canvas.drawString(x_logo, y_logo - 4*mm, "Educativa")
         
+        # ====== ENCABEZADO DERECHO: Logo Cibertec ======
+        try:
+            # Ruta al logo de Cibertec
+            logo_cibertec_path = os.path.join("logos", "logo_cibertec.jpeg")
+            
+            if os.path.exists(logo_cibertec_path):
+                # Dimensiones del logo (ajusta según necesites)
+                logo_width = 25 * mm   # Ancho del logo
+                logo_height = 10 * mm  # Alto del logo
+                
+                # Posición del logo (esquina superior derecha)
+                x_logo_cibertec = ancho - 15*mm - logo_width
+                y_logo_cibertec = alto - 12*mm - logo_height*0.5
+                
+                # Dibujar el logo
+                canvas.drawImage(
+                    logo_cibertec_path,
+                    x_logo_cibertec,
+                    y_logo_cibertec,
+                    width=logo_width,
+                    height=logo_height,
+                    preserveAspectRatio=True,
+                    mask='auto'
+                )
+        except Exception as e:
+            # Si hay error al cargar el logo, no hacer nada (continuar sin logo)
+            pass
+
         # Línea separadora debajo del encabezado
         canvas.setStrokeColor(colors.HexColor('#1a5490'))
         canvas.setLineWidth(0.5)
