@@ -1011,19 +1011,6 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         canvas.drawString(x_logo, y_logo, "Alianza")
         canvas.drawString(x_logo, y_logo - 4*mm, "Educativa")
         
-        # ====== ENCABEZADO DERECHO: Fecha ======
-        canvas.setFont('Helvetica', 9)
-        canvas.setFillColor(colors.black)
-        
-        # Posición del texto derecho (esquina superior derecha)
-        x_derecha = ancho - 15 * mm
-        y_derecha = alto - 12 * mm
-        
-        # Fecha de generación
-        fecha_actual = datetime.now().strftime("%d/%m/%Y")
-        texto_fecha = f"Fecha: {fecha_actual}"
-        canvas.drawRightString(x_derecha, y_derecha, texto_fecha)
-        
         # Línea separadora debajo del encabezado
         canvas.setStrokeColor(colors.HexColor('#1a5490'))
         canvas.setLineWidth(0.5)
@@ -1175,25 +1162,39 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 pdf_final_buffer = BytesIO()
                 pdf_writer = PyPDF2.PdfWriter()
                 
-                # Agregar número de página en formato X/Y a cada página
+                # Agregar fecha y número de página en formato de pie de página
                 for numero_pagina in range(total_paginas):
                     # Obtener página original
                     pagina = pdf_reader.pages[numero_pagina]
                     
-                    # Crear overlay con el número de página
+                    # Crear overlay con pie de página
                     overlay_buffer = BytesIO()
                     overlay_canvas = canvas.Canvas(overlay_buffer, pagesize=A4)
                     
                     # Dimensiones
                     ancho, alto = A4
-                    x_derecha = ancho - 15 * mm
-                    y_derecha = alto - 16 * mm
+                    margen_izq = 15 * mm
+                    margen_der = 15 * mm
+                    y_pie = 12 * mm  # Posición vertical del pie de página
                     
-                    # Dibujar texto de paginación
+                    # Línea separadora ENCIMA del pie de página
+                    overlay_canvas.setStrokeColor(colors.HexColor('#1a5490'))
+                    overlay_canvas.setLineWidth(0.5)
+                    overlay_canvas.line(margen_izq, y_pie + 4*mm, ancho - margen_der, y_pie + 4*mm)
+                    
+                    # Configurar fuente y color
                     overlay_canvas.setFont('Helvetica', 9)
                     overlay_canvas.setFillColor(colors.black)
+                    
+                    # Fecha a la IZQUIERDA
+                    fecha_actual = datetime.now().strftime("%d/%m/%Y")
+                    texto_fecha = f"Fecha: {fecha_actual}"
+                    overlay_canvas.drawString(margen_izq, y_pie, texto_fecha)
+                    
+                    # Número de página a la DERECHA
                     texto_pagina = f"Página {numero_pagina + 1}/{total_paginas}"
-                    overlay_canvas.drawRightString(x_derecha, y_derecha, texto_pagina)
+                    overlay_canvas.drawRightString(ancho - margen_der, y_pie, texto_pagina)
+                    
                     overlay_canvas.save()
                     
                     # Leer el overlay
