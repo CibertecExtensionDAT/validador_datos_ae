@@ -1102,12 +1102,20 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 datos_tabla = [['Nro.', 'Nombres', 'Apellido Paterno', 'Apellido Materno', 'Nota']]
                 
                 for i, (_, row) in enumerate(grupo_df_sorted.iterrows(), 1):
+                    # Redondear nota: si es >= .5, redondea hacia arriba, sino hacia abajo
+                    nota_original = row['NOTA FINAL']
+                    try:
+                        nota_float = float(nota_original)
+                        nota_redondeada = int(round(nota_float))
+                    except (ValueError, TypeError):
+                        nota_redondeada = nota_original  # Si no es numérico, mantener el valor original
+                    
                     datos_tabla.append([
                         str(i),
                         str(row['NOMBRES']),
                         str(row['PATERNO']),
                         str(row['MATERNO']),
-                        str(row['NOTA FINAL'])
+                        str(nota_redondeada)
                     ])
                 
                 # Crear tabla
