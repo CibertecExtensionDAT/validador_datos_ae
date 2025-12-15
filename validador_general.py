@@ -75,19 +75,36 @@ if "archivo2_4p5s_fila_cabecera" not in st.session_state:
     st.session_state.archivo2_4p5s_fila_cabecera = None
 if "cursos_equivalentes" not in st.session_state:
     st.session_state.cursos_equivalentes = [
-        "ADOBE ILLUSTRATOR", "ADOBE INDESIGN", "ADOBE PHOTOSHOP PROFICIENT",
-        "COACHING PERSONAL Y VOCACIONAL", "DE LA IDEA AL EMPRENDIMIENTO",
-        "DESARROLLO DE APLICACIONES MÓVILES", "DESARROLLO WEB", "DISEÑO WEB",
-        "EDICIÓN DE AUDIO", "EDICIÓN DE VIDEO", "EXCEL EXPERT SPECIALIST",
-        "EXCEL INTERMEDIATE SPECIALIST", "EXCEL PROFICIENT SPECIALIST",
-        "FINANZAS PERSONALES", "GESTIÓN DE DATA CON MS EXCEL Y POWER BI",
-        "GESTIÓN EMPRESARIAL", "HABILIDADES BLANDAS", "MARKETING DIGITAL",
-        "MARKETING PERSONAL", "PRESENTACIONES DE IMPACTO",
-        "PROGRAMACIÓN VISUAL KODU PLANET I", "PROGRAMACIÓN VISUAL KODU PLANET II",
-        "PROGRAMACIÓN VISUAL KODU PLANET III", "ROBLOX FOR TEENS", "ROBÓTICA",
-        "SCRATCH", "WORD EXPERT SPECIALIST", "WORD PROFICIENT SPECIALIST",
-        "LEARNING FOR BEGINNERS 1", "LEARNING FOR BEGINNERS 2", "CODE FOR KIDS"
-    ]
+    "Adobe Illustrator",
+    "Adobe Indesing",
+    "Adobe Photoshop Proficient",
+    "De la Idea al Emprendimiento",
+    "Diseño creativo con Inteligencia Artificial (IA)",
+    "Diseño Web",
+    "Excel Expert Specialist",
+    "Excel Intermediate Specialist",
+    "Excel Proficient Specialist",
+    "Explorando la Inteligencia Artificial (IA)",
+    "Gestión de Data con Google Sheets & Locker Studio",
+    "Gestión de Data con MS Excel y Power BI",
+    "Google Docs Avanzado",
+    "Google Docs Básico",
+    "Google Sheets Avanzado",
+    "Google Sheets Básico",
+    "Google Sheets Intermedio",
+    "Google Slides Presentaciones de Impacto",
+    "Habilidades Blandas",
+    "Innovación Digital con Inteligencia Artificial (IA)",
+    "Learning for Beginners 1",
+    "Learning for Beginners 2",
+    "Marketing Personal",
+    "Presentaciones de Impacto",
+    "Programación Visual Kodu Planet I",
+    "Programación Visual Kodu Planet II",
+    "Scratch",
+    "Word Expert Specialist",
+    "Word Proficient Specialist"
+]
 
 # Tab03
 if "tab3_archivo_procesado" not in st.session_state:
@@ -4087,6 +4104,9 @@ with tab2:
                 data.append(row)
             
             df = pd.DataFrame(data)
+
+            if len(df.columns) > 19:
+                df = df.iloc[:, :19]
             
             # Detectar cabecera (debe estar en fila 8 para formato certificado)
             fila_cabecera = None
