@@ -806,6 +806,16 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
     Returns:
         BytesIO con el archivo actualizado preservando formato
     """
+
+    # ORDENAR por PATERNO antes de guardar (si existe la columna)
+    if 'PATERNO' in df_procesado.columns:
+        columnas_orden = ['PATERNO']
+        if 'MATERNO' in df_procesado.columns:
+            columnas_orden.append('MATERNO')
+        if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
+            columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
+        df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
+    
     wb = load_workbook(BytesIO(archivo_original_bytes))
     
     # Si no se especifica nombre de hoja, usar la primera
@@ -923,6 +933,14 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
     
     for nombre_hoja, datos in dict_hojas_procesadas.items():
         df_procesado = datos['df']
+        # ORDENAR por PATERNO antes de guardar (si existe la columna)
+        if 'PATERNO' in df_procesado.columns:
+            columnas_orden = ['PATERNO']
+            if 'MATERNO' in df_procesado.columns:
+                columnas_orden.append('MATERNO')
+            if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
+                columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
+            df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
         fila_cabecera = datos['fila_cabecera']
         
         # Si la hoja no existe en el workbook, usar la primera disponible o crearla
@@ -1673,6 +1691,15 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
     
     for nombre_hoja, datos in dict_hojas_procesadas.items():
         df_procesado = datos['df']
+
+        # ORDENAR por PATERNO antes de guardar (si existe la columna)
+        if 'PATERNO' in df_procesado.columns:
+            columnas_orden = ['PATERNO']
+            if 'MATERNO' in df_procesado.columns:
+                columnas_orden.append('MATERNO')
+            if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
+                columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
+            df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
         
         # Crear nueva hoja
         ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
