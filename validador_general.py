@@ -28,6 +28,9 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+# Librerías para generación de insignias
+from PIL import Image, ImageDraw, ImageFont
+import zipfile
 
 # ================================================
 # CONFIGURACIÓN INICIAL
@@ -2575,6 +2578,22 @@ def generar_todos_certificados():
         return True
     return False
 
+# Función de centrado para Tab05
+def draw_centered_text(draw, text, x_position, y_position, font, fill="white"):
+    # Calcular el ancho del texto
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+
+    # Calcular el alto del texto
+    bboxY = draw.textbbox((0, 0), text, font=font)
+    text_height = bboxY[3] - bboxY[1]
+    
+    x_position = x_position - (text_width) / 2
+    y_position = y_position - (text_height) / 2
+
+    # Dibujar el texto centrado
+    draw.text((x_position, y_position), text, fill=fill, font=font)
+
 # ================================================
 # INTERFAZ PRINCIPAL CON TABS
 # ================================================
@@ -2582,7 +2601,7 @@ def generar_todos_certificados():
 st.title("📊 Sistema de Validación de Archivos")
 
 # Crear tabs principales
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validador de Nóminas", "⚖️ Validador de Evaluaciones", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Validador de Nóminas", "⚖️ Validador de Evaluaciones", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF", "📛 Generador de Insignias"])
 
 # ================================================
 # TAB 1: VALIDADOR GENERAL
@@ -5388,3 +5407,206 @@ with tab4:
         st.info("👆 Sube un archivo Excel para generar los certificados automáticamente.")
         # Resetear el estado
         st.session_state.archivo_procesado = False
+
+# ================================================
+# TAB 5: GENERADOR DE INSIGNIAS
+# ================================================
+with tab5:
+    st.markdown("## 📛 Generador de Insignias para docentes o alumnos")
+    st.info("""
+            📌 **Columnas base requeridas:**
+            - NOMBRE,PATERNO,MATERNO,CURSO,AÑO,TIPO DE INSIGNEA
+            
+            ⚠️ IMPORTANTE:
+            - Todos los datos se convertirán automáticamente a **MAYÚSCULAS**
+            - La cabecera debe estar en la **fila 9** del Excel
+            - El nombre del PDF será: `{TIPO DE INSIGNEA}_{NOMBRE COMPLETO}.pdf`
+            """)
+    
+    # Selector de tipo de insignia
+    tipo_insignia = st.selectbox(
+        "Selecciona el tipo de insignia:",
+        ["ALUMNO", "DOCENTE"],
+        key="tipo_insignia_selector"
+    )
+    
+    # Upload del archivo Excel
+    uploaded_file = st.file_uploader(
+        f"📄 Sube el archivo Excel con los datos de {tipo_insignia.lower()}s",
+        type=['xlsx'],
+        key="excel_insignias"
+    )
+    
+    if uploaded_file:
+        try:
+            # Leer el Excel con la cabecera en la fila 9
+            df = pd.read_excel(uploaded_file, header=8)
+            
+            # Eliminar filas completamente vacías
+            df = df.dropna(how='all')
+
+            # Reemplazar NaN por cadenas vacías
+            df = df.fillna('')
+            
+            # Convertir todo a mayúsculas
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    df[col] = df[col].astype(str).str.upper()
+            
+            # Crear columna IDENTIFICADOR = NOMBRE + PATERNO + MATERNO
+            if 'NOMBRE' in df.columns and 'PATERNO' in df.columns and 'MATERNO' in df.columns:
+                df['IDENTIFICADOR'] = (
+                    df['NOMBRE'].astype(str).str.strip() + ' ' + 
+                    df['PATERNO'].astype(str).str.strip() + ' ' + 
+                    df['MATERNO'].astype(str).str.strip()
+                )
+                # Limpiar espacios múltiples y reemplazar "NAN" por vacío
+                df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace(r'\s+', ' ', regex=True).str.strip()
+                df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace('NAN', '', regex=True).str.strip()
+            else:
+                st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO y MATERNO")
+                st.stop()
+            
+            st.success(f"✅ Archivo cargado correctamente: {len(df)} registros encontrados")
+            
+            # Mostrar vista previa (sin mostrar IDENTIFICADOR)
+            with st.expander("👁️ Vista previa de los datos"):
+                # Crear una copia sin la columna IDENTIFICADOR para mostrar
+                df_preview = df.drop(columns=['IDENTIFICADOR'])
+                st.dataframe(df_preview.head(10), hide_index=True)
+            
+            # Botón para generar insignias
+            if st.button("🎨 Generar Insignias PDF", key="generar_insignias", type="primary", use_container_width=True):
+                with st.spinner("Generando insignias..."):
+                    # Crear carpeta temporal
+                    temp_dir = "temp_insignias"
+                    os.makedirs(temp_dir, exist_ok=True)
+                    
+                    pdf_files = []
+                    errores = []
+                    
+                    # Progress bar
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # Procesar cada fila
+                    total_rows = len(df)
+                    for idx, row in df.iterrows():
+                        try:
+                            status_text.text(f"Procesando insignia {idx + 1} de {total_rows}...")
+                            progress_bar.progress((idx + 1) / total_rows)
+                            
+                            # Determinar qué imagen usar
+                            if tipo_insignia == "ALUMNO":
+                                imagen_fondo = "plantillas_insignias/ALUMNO.jpg"
+                            else:  # DOCENTE
+                                tipo_doc = str(row.get("TIPO DE INSIGNEA", "SENIOR")).upper()
+                                if "ESPECIALISTA" in tipo_doc:
+                                    imagen_fondo = "plantillas_insignias/DOCENTE_ESPECIALISTA.jpg"
+                                else:
+                                    imagen_fondo = "plantillas_insignias/DOCENTE_SENIOR.jpg"
+                            
+                            # Verificar que existe la imagen
+                            if not os.path.exists(imagen_fondo):
+                                errores.append(f"Fila {idx+2}: No se encontró la imagen {imagen_fondo}")
+                                continue
+                            
+                            # Abrir imagen de fondo
+                            img = Image.open(imagen_fondo)
+                            draw = ImageDraw.Draw(img)
+                            
+                            # Cargar fuente
+                            try:
+                                font_path = "fonts/trebuchet.ttf"
+                                font_nombre = ImageFont.truetype(font_path, 60)
+                                font_curso = ImageFont.truetype(font_path, 60)
+                                font_anio = ImageFont.truetype(font_path, 65)
+                            except:
+                                font_nombre = ImageFont.load_default()
+                                font_curso = ImageFont.load_default()
+                                font_anio = ImageFont.load_default()
+                            
+                            # Preparar variables según el tipo
+                            identificador = str(row.get("IDENTIFICADOR", "")).upper()
+                            ano = str(row.get("AÑO", "")).upper()
+                            tipo_doc = str(row.get("TIPO DE INSIGNEA", "ALUMNO")).upper()
+                            
+                            if tipo_insignia == "ALUMNO":
+                                # Variables para alumnos: IDENTIFICADOR, CURSO, AÑO
+                                curso = str(row.get("CURSO", "")).upper()
+                                
+                                draw_centered_text(draw, identificador, 621, 435, font_nombre, fill="white")
+                                draw_centered_text(draw, curso, 621, 677, font_curso, fill="white")
+                                draw_centered_text(draw, ano, 621, 926, font_anio, fill="white")
+                                
+                                pdf_name = f"ALUMNO_{identificador}.pdf"
+                                
+                            else:  # DOCENTE
+                                # Variables para docentes: IDENTIFICADOR, AÑO
+                                draw_centered_text(draw, identificador, 621, 435, font_nombre, fill="white")
+                                draw_centered_text(draw, ano, 621, 926, font_anio, fill="white")
+                                
+                                # Nombre del archivo: {TIPO DE INSIGNEA}_IDENTIFICADOR.pdf
+                                # tipo_doc puede ser SENIOR, ESPECIALISTA, etc.
+                                pdf_name = f"{tipo_doc}_{identificador}.pdf"
+                            
+                            # Limpiar nombre de archivo
+                            pdf_name = pdf_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+                            pdf_path = os.path.join(temp_dir, pdf_name)
+                            
+                            # Convertir imagen a PDF
+                            img_rgb = img.convert('RGB')
+                            img_rgb.save(pdf_path, "PDF", resolution=100.0)
+                            
+                            pdf_files.append(pdf_path)
+                            
+                        except Exception as e:
+                            errores.append(f"Fila {idx+2}: {str(e)}")
+                    
+                    # Limpiar progress bar
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    # Mostrar resultados
+                    if pdf_files:
+                        st.success(f"✅ Se generaron {len(pdf_files)} insignias correctamente")
+                        
+                        # Crear ZIP
+                        zip_filename = f"insignias_{tipo_insignia.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+                        zip_path = os.path.join(temp_dir, zip_filename)
+                        
+                        with zipfile.ZipFile(zip_path, 'w') as zipf:
+                            for pdf_file in pdf_files:
+                                zipf.write(pdf_file, os.path.basename(pdf_file))
+                        
+                        # Descargar ZIP
+                        with open(zip_path, 'rb') as f:
+                            st.download_button(
+                                label="📦 Descargar ZIP con todas las insignias",
+                                data=f.read(),
+                                file_name=zip_filename,
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+                    
+                    # Mostrar errores si los hay
+                    if errores:
+                        st.warning(f"⚠️ Se encontraron {len(errores)} errores:")
+                        with st.expander("Ver errores"):
+                            for error in errores:
+                                st.text(error)
+                    
+                    # Limpiar archivos temporales
+                    try:
+                        import shutil
+                        if os.path.exists(temp_dir):
+                            shutil.rmtree(temp_dir)
+                    except:
+                        pass
+                        
+        except Exception as e:
+            st.error(f"❌ Error al procesar el archivo: {str(e)}")
+            st.exception(e)
+    
+    else:
+        st.info("👆 Sube un archivo Excel para comenzar a generar insignias")
