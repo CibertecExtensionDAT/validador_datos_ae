@@ -1,19 +1,16 @@
-# ===============================================
-# PASO 1: SUBIDA Y VALIDACIÓN DEL ARCHIVO 1
-# ===============================================
 import io
 import re
 import streamlit as st
 import pandas as pd
+import os
+import PyPDF2
+import zipfile
 from io import BytesIO
 from openpyxl import Workbook
 from copy import copy
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-# Librerías y dependencias de Certificados
-import os
-import PyPDF2
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.colors import HexColor
@@ -22,28 +19,19 @@ from reportlab.pdfbase.ttfonts import TTFont
 from zipfile import ZipFile
 from datetime import datetime
 from tempfile import NamedTemporaryFile
-# Librerías de Reporte PDF
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-# Librerías para generación de insignias
 from PIL import Image, ImageDraw, ImageFont
-import zipfile
 
-# ================================================
-# CONFIGURACIÓN INICIAL
-# ================================================
 st.set_page_config(
     page_title="Validador de Archivos",
     page_icon="📊",
     layout="wide"
 )
 
-# ================================================
-# INICIALIZACIÓN DE ESTADOS
-# ================================================
 if "paso_actual" not in st.session_state:
     st.session_state.paso_actual = 0
 if "nombre_colegio" not in st.session_state:
@@ -120,8 +108,6 @@ if "cursos_equivalentes" not in st.session_state:
     "WORD EXPERT SPECIALIST",
     "WORD PROFICIENT SPECIALIST"
 ]
-
-# Tab03
 if "tab3_archivo_procesado" not in st.session_state:
     st.session_state.tab3_archivo_procesado = False
 if "tab3_df_reporte" not in st.session_state:
@@ -132,8 +118,6 @@ if "tab3_tipo_archivo" not in st.session_state:
     st.session_state.tab3_tipo_archivo = ""
 if "tab3_reset_counter" not in st.session_state:
     st.session_state.tab3_reset_counter = 0
-
-# Tab04
 if 'tipo_certificado_seleccionado' not in st.session_state:
     st.session_state.tipo_certificado_seleccionado = None
 if 'usar_marca_agua_seleccionado' not in st.session_state:
@@ -142,8 +126,6 @@ if 'fecha_certificado_seleccionada' not in st.session_state:
     st.session_state.fecha_certificado_seleccionada = datetime.now().date()
 if 'tab4_reset_counter' not in st.session_state:
     st.session_state.tab4_reset_counter = 0
-
-# Tab 05
 if 'df_procesado' not in st.session_state:
     st.session_state.df_procesado = None
 if 'grupos' not in st.session_state:
@@ -157,9 +139,6 @@ if 'zip_buffer' not in st.session_state:
 if 'tab5_reset_counter' not in st.session_state:
     st.session_state.tab5_reset_counter = 0
 
-# ================================================
-# CONSTANTES
-# ================================================
 COLUMNAS_ARCHIVO1 = [
     "NRO.", "PATERNO", "MATERNO", "NOMBRES", "NACIMIENTO (DD/MM/YYYY)", "SEXO (M/F)",
     "GRADO", "SECCIÓN", "CORREO INSTITUCIONAL", "NEURODIVERSIDAD (SÍ/NO)", "DNI"
@@ -190,7 +169,6 @@ COLUMNAS_ARCHIVO_PDF_4P5S = [
     'NRO.', 'PATERNO', 'MATERNO', 'NOMBRES', 'CURSO', 'GRADO', 'SECCIÓN', 'NOTA VIGESIMAL 25%'
 ]
 
-# Constantes de validación
 SEXO_VALIDO = ["M", "F"]
 SECCIONES_VALIDAS = ["A", "B", "C", "D", "E", "F", "G", "U", "UNICO", "UNICA", "ÚNICO", "ÚNICA", "Único", "Única"]
 GRADOS_VALIDOS = ["1P", "2P", "3P", "4P", "5P", "6P", "1S", "2S", "3S", "4S", "5S"]
@@ -273,7 +251,6 @@ LISTA_COLEGIOS = [
     "Colegio Santa Rosa de Lima"
 ]
 
-# Configuración de espacios para texto en tab05
 CONFIG_INSIGNIAS = {
             'IDENTIFICADOR': {
                 'font_size_inicial': 60,
@@ -295,12 +272,9 @@ CONFIG_INSIGNIAS = {
             }
         }
 
-# ================================================
-# FUNCIONES AUXILIARES
-# ================================================
 def detectar_cabecera_automatica(df: pd.DataFrame, columnas_objetivo: list):
     """Detecta automáticamente la fila de cabecera"""
-    max_filas, max_cols = min(15, len(df)), min(25, len(df.columns)) #15
+    max_filas, max_cols = min(15, len(df)), min(25, len(df.columns))
     subset = df.iloc[:max_filas, :max_cols]
     columnas_objetivo_norm = [c.strip().lower() for c in columnas_objetivo]
 
@@ -325,10 +299,7 @@ def normalizar_enie(texto):
     if pd.isna(texto):
         return ""
     
-    # Convertir a mayúsculas y limpiar espacios
     texto = str(texto).strip().upper()
-    
-    # Normalizar espacios múltiples
     texto = ' '.join(texto.split())
     
     return texto
@@ -343,27 +314,21 @@ def limpiar_filas_vacias(df, columnas_clave=None):
         DataFrame limpio sin filas completamente vacías (evita sólo los Nro o N°)
     """
     if columnas_clave is None:
-        # Usar las columnas 2, 3, 4
         columnas_clave = df.columns[1:4].tolist()
     
-    # Contar registros originales
     total_original = len(df)
     
-    # Filtrar: mantener solo filas con almenos una columna clave tenga datos
     df_limpio = df.dropna(subset=columnas_clave, how='all').copy()
     
-    # Si el DataFrame queda vacío después del dropna, retornarlo directamente
     if df_limpio.empty:
         st.warning(f"⚠️ La hoja está vacía o no contiene datos válidos (se ignorará)")
         return df_limpio
 
-    # Eliminar filas donde todas las columnas clave sean strings vacíos
     mask = df_limpio[columnas_clave].apply(
         lambda x: x.astype(str).str.strip().ne('')
     ).any(axis=1)
     df_limpio = df_limpio[mask].reset_index(drop=True)
     
-    # Mostrar info si se eliminaron filas
     filas_eliminadas = total_original - len(df_limpio)
     if filas_eliminadas > 0:
         st.info(f"🧹 Se eliminaron {filas_eliminadas} filas vacías (quedaron {len(df_limpio)} registros)")
@@ -377,11 +342,9 @@ def homologar_dataframe(df):
     - Columnas PATERNO, MATERNO, NOMBRES: Además quita acentos y mantiene la Ñ
     """
 
-    # Si el DataFrame está vacío, retornarlo directamente
     if df.empty:
         return df
 
-    # Columnas especiales que requieren normalización de acentos
     columnas_nombres = ["PATERNO", "MATERNO", "NOMBRES"]
     filas_vacias = df[df[columnas_nombres].isnull().any(axis=1)]
 
@@ -390,15 +353,11 @@ def homologar_dataframe(df):
         st.dataframe(filas_vacias, use_container_width=True)
         st.stop()
 
-    # Procesar todas las columnas
     for col in df.columns:
         if col.upper() in columnas_nombres:
-            # Para columnas de nombres: usar función que preserva Ñ
             df[col] = df[col].apply(normalizar_enie)
-            # Normalizar espacios múltiples
             df[col] = df[col].str.replace(r'\s+', ' ', regex=True).str.strip()
         else:
-            # Solo mayúsculas y quitar espacios
             df[col] = (
                 df[col].astype(str)
                 .str.strip()
@@ -422,7 +381,6 @@ def convertir_numericas_a_entero(df, columnas=None):
         DataFrame con columnas convertidas
     """
 
-    # Si el DataFrame está vacío, retornarlo directamente
     if df.empty:
         return df
 
@@ -433,32 +391,25 @@ def convertir_numericas_a_entero(df, columnas=None):
         if col not in df.columns:
             continue
         
-        # Procesar cada valor individualmente
         def convertir_valor(val):
             """Convierte un valor individual"""
             if pd.isna(val):
                 return val
             
-            # Convertir a string para inspeccionar
             val_str = str(val).strip()
             
-            # Si ya tiene letras, dejarlo como está
             if any(c.isalpha() for c in val_str):
                 return val_str
             
-            # Si es numérico puro, intentar convertir
             try:
                 val_num = float(val)
-                # Si es un entero disfrazado de float (1.0, 2.0)
                 if val_num % 1 == 0:
                     return str(int(val_num))
                 else:
-                    # Si tiene decimales reales (1.5), mantener como string
                     return val_str
             except (ValueError, TypeError):
                 return val_str
         
-        # Aplicar la conversión a toda la columna
         df[col] = df[col].apply(convertir_valor)
     
     return df
@@ -479,7 +430,6 @@ def validar_y_mapear_grados(df, col_grado="GRADO", tipo_validacion="todos"):
     errores = []
     df[col_grado] = df[col_grado].astype(str).str.strip().str.upper()
     
-    # Definir mapeos según el tipo de validación
     if tipo_validacion == "1p3p":
         mapeo_grados = {
             "1": "1P", "2": "2P", "3": "3P"
@@ -495,10 +445,7 @@ def validar_y_mapear_grados(df, col_grado="GRADO", tipo_validacion="todos"):
         mapeo_grados = MAPEO_GRADOS
         grados_validos = GRADOS_VALIDOS
     
-    # Mapear números a grados
     df[col_grado] = df[col_grado].replace(mapeo_grados)
-    
-    # Validar grados
     grados_invalidos = df.loc[~df[col_grado].isin(grados_validos)]
 
     if len(grados_invalidos) > 0:
@@ -513,14 +460,12 @@ def inferir_sexo_por_nombre(nombre):
     Retorna 'M' o 'F' según terminaciones comunes en español.
     """
     if pd.isna(nombre) or str(nombre).strip() == "":
-        return "M"  # Por defecto M si no hay nombre
+        return "M"
     
     nombre = str(nombre).strip().upper()
     primer_nombre = nombre.split()[0] if nombre else ""
     
-    # Terminaciones típicamente femeninas
     terminaciones_femeninas = ['A', 'IA', 'INA', 'ELA', 'ANA', 'LIA', 'RIA', 'TA', 'DA']
-    # Nombres específicamente femeninos comunes
     nombres_femeninos = ['MARIA', 'CARMEN', 'ROSA', 'LUZ', 'SOL', 'MERCEDES', 'BEATRIZ', 'INES', 'ISABEL']
     
     if primer_nombre in nombres_femeninos:
@@ -530,7 +475,7 @@ def inferir_sexo_por_nombre(nombre):
         if primer_nombre.endswith(term):
             return "F"
     
-    return "M"  # Por defecto masculino
+    return "M"
 
 def validar_sexo(df, col_sexo="SEXO (M/F)"):
     """
@@ -540,8 +485,6 @@ def validar_sexo(df, col_sexo="SEXO (M/F)"):
     """
     errores = []
     df[col_sexo] = df[col_sexo].astype(str).str.strip().str.upper()
-    
-    # Reemplazar valores vacíos o inválidos por inferencia basada en nombre
     mask_vacios_invalidos = ~df[col_sexo].isin(SEXO_VALIDO)
     
     if mask_vacios_invalidos.any():
@@ -549,7 +492,6 @@ def validar_sexo(df, col_sexo="SEXO (M/F)"):
             nombre = df.loc[idx, "NOMBRES"] if "NOMBRES" in df.columns else ""
             sexo_inferido = inferir_sexo_por_nombre(nombre)
             df.loc[idx, col_sexo] = sexo_inferido
-            # Se registra como advertencia informativa (no error crítico)
             identificador = crear_identificador(df.loc[[idx]], "PATERNO", "MATERNO", "NOMBRES").iloc[0]
             errores.append(f"INFO - Fila {idx + 2}: Sexo vacío/inválido, se asignó '{sexo_inferido}' según nombre - {identificador}")
     return errores
@@ -561,8 +503,6 @@ def validar_secciones(df, col_seccion="SECCIÓN"):
     """
     errores = []
     df[col_seccion] = df[col_seccion].astype(str).str.strip().str.upper()
-    
-    # (UNICO/UNICA -> U)
     df[col_seccion] = df[col_seccion].replace(MAPEO_SECCIONES)
 
     secciones_invalidas = df.loc[~df[col_seccion].isin(SECCIONES_VALIDAS)]
@@ -581,13 +521,11 @@ def validar_neurodiversidad(df, col_neuro="NEURODIVERSIDAD (SÍ/NO)"):
     errores = []
     df[col_neuro] = df[col_neuro].astype(str).str.strip().str.upper()
     
-    # Mapear variaciones comunes
     mapeo_neuro = {
         "SI": "SÍ", "S": "SÍ", "YES": "SÍ", "Y": "SÍ",
         "N": "NO", "NOT": "NO"
     }
     df[col_neuro] = df[col_neuro].replace(mapeo_neuro)
-    
     neuros_invalidas = df.loc[~df[col_neuro].isin(["SÍ", "NO"])]
 
     if len(neuros_invalidas) > 0:
@@ -607,14 +545,11 @@ def validar_fecha_nacimiento(df, col_fecha="NACIMIENTO (DD/MM/YYYY)"):
     for idx, row in df.iterrows():
         fecha_original = str(row[col_fecha]).strip()
         identificador = crear_identificador(df.loc[[idx]], "PATERNO", "MATERNO", "NOMBRES").iloc[0]
-        
-        # Intentar parsear la fecha con diferentes formatos comunes
         fecha_parseada = pd.to_datetime(fecha_original, errors="coerce", dayfirst=True)
         
         if pd.isna(fecha_parseada):
             errores.append(f"Fila {idx + 2}: Fecha inválida '{fecha_original}' - {identificador}")
         else:
-            # Formatear al formato deseado DD/MM/YYYY
             fecha_formateada = fecha_parseada.strftime("%d/%m/%Y")
             df.at[idx, col_fecha] = fecha_formateada
     
@@ -632,7 +567,6 @@ def validar_dni(df, col_dni="DNI"):
         dni = row[col_dni]
         identificador = crear_identificador(df.loc[[idx]], "PATERNO", "MATERNO", "NOMBRES").iloc[0]
         
-        # Validar que sea número de 8 dígitos
         if not (dni.isdigit() and len(dni) == 8):
             errores.append(f"Fila {idx + 2}: DNI inválido '{dni}' (debe ser 8 dígitos) - {identificador}")
     
@@ -649,7 +583,6 @@ def validar_correo(df, col_correo="CORREO INSTITUCIONAL"):
         correo = str(row[col_correo]).strip().lower()
         identificador = crear_identificador(df.loc[[idx]], "PATERNO", "MATERNO", "NOMBRES").iloc[0]
         
-        # Validación básica: contiene @ y .
         if "@" not in correo or "." not in correo.split("@")[-1]:
             errores.append(f"Fila {idx + 2}: Correo inválido '{correo}' - {identificador}, no contiene @ ni .")
     
@@ -695,7 +628,6 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     Returns:
         tuple: (df_1p3p, df_4p5s) - DataFrames separados por grado
     """
-    # Mapear las columnas de archivo1 a las de archivo2
     df1_base = df_archivo1[[
         "IDENTIFICADOR", 
         "PATERNO", 
@@ -705,14 +637,9 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
         "SECCIÓN"
     ]].copy()
     
-    # Preparar archivo2 para el merge
     df2_merge = df_archivo2_procesado.copy()
-    
-    # Marcar el origen de cada registro ANTES del merge
     df2_merge['_origen'] = 'archivo2'
     df1_base['_origen'] = 'archivo1'
-
-    # Full outer join usando IDENTIFICADOR
     df_evaluador = pd.merge(
         df2_merge,
         df1_base,
@@ -722,33 +649,25 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
         indicator=True
     )
     
-    # Crear columna OBSERVADOS basada en el origen
     def asignar_observacion(row):
-        if row['_merge'] == 'both':  # Aparece en ambos archivos
+        if row['_merge'] == 'both':
             return ''
-        elif row['_merge'] == 'right_only':  # Solo en archivo1
+        elif row['_merge'] == 'right_only':
             return 'SN'
-        else:  # 'left_only' - Solo en archivo2
+        else:  # 'left_only'
             return 'RET'
     
     df_evaluador['OBSERVADOS'] = df_evaluador.apply(asignar_observacion, axis=1)
-    
-    # Eliminar columnas auxiliares
     df_evaluador = df_evaluador.drop(columns=['_merge', '_origen'], errors='ignore')
-    
-    # Completar datos faltantes: si no hay datos de archivo2, usar los de archivo1
     columnas_comunes = ["PATERNO", "MATERNO", "NOMBRES", "GRADO", "SECCIÓN"]
     
-    # Completar primero la columna GRADO antes del filtro
     if "GRADO_archivo1" in df_evaluador.columns:
         df_evaluador["GRADO"] = df_evaluador["GRADO"].fillna(df_evaluador["GRADO_archivo1"])
         mask_vacio = (df_evaluador["GRADO"] == "") | (df_evaluador["GRADO"].isna())
         df_evaluador.loc[mask_vacio, "GRADO"] = df_evaluador.loc[mask_vacio, "GRADO_archivo1"]
     
-    # Eliminar la columna temporal de GRADO_archivo1 si existe
     df_evaluador = df_evaluador.drop(columns=["GRADO_archivo1"], errors='ignore')
     
-    # Continuar completando el resto de columnas comunes (excepto GRADO que ya se procesó)
     columnas_comunes_restantes = ["PATERNO", "MATERNO", "NOMBRES", "SECCIÓN"]
 
     for col in columnas_comunes_restantes:
@@ -759,13 +678,9 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
             df_evaluador.loc[mask_vacio, col] = df_evaluador.loc[mask_vacio, col_archivo1]
             df_evaluador = df_evaluador.drop(columns=[col_archivo1])
     
-    # Asegurar que CURSO y NOTA VIGESIMAL 25% existan
     if "CURSO" not in df_evaluador.columns:
         df_evaluador["CURSO"] = ""
-    #if "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
-    #    df_evaluador["NOTA VIGESIMAL 25%"] = ""
-    
-    # Detectar si es 1P-3P o 4P-5S por los grados presentes
+
     grados_presentes = df_evaluador["GRADO"].unique()
     es_1p3p = any(g in ["1P", "2P", "3P"] for g in grados_presentes if pd.notna(g))
     es_4p5s = any(g in ["4P", "5P", "6P", "1S", "2S", "3S", "4S", "5S"] for g in grados_presentes if pd.notna(g))
@@ -775,42 +690,35 @@ def crear_archivo_evaluador(df_archivo1, df_archivo2_procesado):
     if es_4p5s and "NOTA VIGESIMAL 25%" not in df_evaluador.columns:
         df_evaluador["NOTA VIGESIMAL 25%"] = ""
 
-    # Rellenar NaN restantes con cadenas vacías
     df_evaluador = df_evaluador.fillna("")
     
-    # SEPARAR EN DOS DATAFRAMES SEGÚN GRADO
     grados_1p3p = ["1P", "2P", "3P"]
     grados_4p5s = ["4P", "5P", "6P", "1S", "2S", "3S", "4S", "5S"]
     
     df_1p3p = df_evaluador[df_evaluador["GRADO"].isin(grados_1p3p)].copy()
     df_4p5s = df_evaluador[df_evaluador["GRADO"].isin(grados_4p5s)].copy()
     
-    # Definir columnas finales para 1P-3P (sin NOTAS VIGESIMALES 75% ni PROMEDIO)
     columnas_1p3p = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
         "GRADO", "SECCIÓN", "NOTA VIGESIMAL 100%", "IDENTIFICADOR", "OBSERVADOS"
     ]
     
-    # Definir columnas finales para 4P-5S (con NOTAS VIGESIMALES 75% y PROMEDIO)
     columnas_4p5s = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRES", "CURSO", 
         "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%", 
         "NOTAS VIGESIMALES 75%", "PROMEDIO", "IDENTIFICADOR", "OBSERVADOS"
     ]
     
-    # Asegurar columnas para 1P-3P
     for col in columnas_1p3p:
         if col not in df_1p3p.columns:
             df_1p3p[col] = ""
     df_1p3p = df_1p3p[columnas_1p3p]
     
-    # Asegurar columnas para 4P-5S
     for col in columnas_4p5s:
         if col not in df_4p5s.columns:
             df_4p5s[col] = ""
     df_4p5s = df_4p5s[columnas_4p5s]
     
-    # Regenerar NRO. secuencial para cada DataFrame
     if len(df_1p3p) > 0:
         df_1p3p["NRO."] = range(1, len(df_1p3p) + 1)
     
@@ -834,7 +742,6 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
         BytesIO con el archivo actualizado preservando formato
     """
 
-    # ORDENAR por PATERNO antes de guardar (si existe la columna)
     if 'PATERNO' in df_procesado.columns:
         columnas_orden = ['PATERNO']
         if 'MATERNO' in df_procesado.columns:
@@ -845,27 +752,22 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
     
     wb = load_workbook(BytesIO(archivo_original_bytes))
     
-    # Si no se especifica nombre de hoja, usar la primera
     if nombre_hoja is None or nombre_hoja not in wb.sheetnames:
         ws = wb.active
     else:
         ws = wb[nombre_hoja]
 
-    # Si solo_hoja_especificada=True, eliminar todas las demás hojas
     if solo_hoja_especificada:
       hoja_a_mantener = ws.title
       hojas_a_eliminar = [sheet for sheet in wb.sheetnames if sheet != hoja_a_mantener]
       for hoja in hojas_a_eliminar:
           wb.remove(wb[hoja])
     
-    # Convertir fila_cabecera de pandas (base 0) a openpyxl (base 1)
     fila_cabecera_excel = fila_cabecera + 1
     fila_inicio_datos = fila_cabecera_excel + 1
     
-    # Si se debe agregar columnas nuevas, actualizar la cabecera
     if agregar_columnas_nuevas:
         
-        # Leer cabecera actual del Excel (solo celdas con valores)
         cabecera_actual = []
         ultima_col_con_datos = 0
         for idx, cell in enumerate(ws[fila_cabecera_excel], start=1):
@@ -874,20 +776,15 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
                 ultima_col_con_datos = idx
         
         cabecera_df = [str(col).upper().strip() for col in df_procesado.columns]
-        
-        # Encontrar columnas nuevas que no están en la cabecera actual
         columnas_nuevas = [col for col in cabecera_df if col not in cabecera_actual]
         
-        # Agregar las columnas nuevas inmediatamente después de la última columna con datos
         if columnas_nuevas:
-            # Obtener el estilo de la última celda de la cabecera con datos
             celda_referencia = ws.cell(row=fila_cabecera_excel, column=ultima_col_con_datos)
             
             for idx, nueva_col in enumerate(columnas_nuevas, start=1):
                 nueva_celda = ws.cell(row=fila_cabecera_excel, column=ultima_col_con_datos + idx)
                 nueva_celda.value = nueva_col
                 
-                # Copiar el estilo de la celda de referencia
                 if celda_referencia.fill:
                     nueva_celda.fill = PatternFill(
                         start_color=celda_referencia.fill.start_color,
@@ -908,24 +805,19 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
                         vertical=celda_referencia.alignment.vertical
                     )
 
-    # Convertir TODAS las cabeceras a mayúsculas (incluyendo las existentes)
     for col_idx, col_name in enumerate(df_procesado.columns, start=1):
         celda_cabecera = ws.cell(row=fila_cabecera_excel, column=col_idx)
         celda_cabecera.value = str(col_name).upper()
 
-    # Eliminar filas de datos antiguos (preservando cabecera y filas previas)
     if ws.max_row >= fila_inicio_datos:
         ws.delete_rows(fila_inicio_datos, ws.max_row - fila_inicio_datos + 1)
     
-    # Insertar nuevos datos
     for r_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
         for c_idx, value in enumerate(row, start=1):
-            # Manejar valores NaN
             if pd.isna(value):
                 value = None
             ws.cell(row=r_idx, column=c_idx, value=value)
     
-    # Guardar en BytesIO
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -951,7 +843,6 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
     """
     wb = load_workbook(BytesIO(archivo_original_bytes))
     
-    # Si solo_hojas_especificadas=True, eliminar todas las hojas que NO estén en dict_hojas_procesadas
     if solo_hojas_especificadas:
         hojas_a_mantener = list(dict_hojas_procesadas.keys())
         hojas_a_eliminar = [sheet for sheet in wb.sheetnames if sheet not in hojas_a_mantener]
@@ -960,7 +851,6 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
     
     for nombre_hoja, datos in dict_hojas_procesadas.items():
         df_procesado = datos['df']
-        # ORDENAR por PATERNO antes de guardar (si existe la columna)
         if 'PATERNO' in df_procesado.columns:
             columnas_orden = ['PATERNO']
             if 'MATERNO' in df_procesado.columns:
@@ -970,24 +860,19 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
             df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
         fila_cabecera = datos['fila_cabecera']
         
-        # Si la hoja no existe en el workbook, usar la primera disponible o crearla
         if nombre_hoja not in wb.sheetnames:
-            # Si es la primera hoja a procesar y no existe, usar la hoja activa
             if len([k for k in dict_hojas_procesadas.keys()]) == 1:
                 ws = wb.active
                 ws.title = nombre_hoja
             else:
-                # Crear nueva hoja
                 ws = wb.create_sheet(title=nombre_hoja)
-                fila_cabecera = 0  # Para hojas nuevas, empezar desde fila 0
+                fila_cabecera = 0
         else:
             ws = wb[nombre_hoja]
         
-        # Convertir fila_cabecera de pandas (base 0) a openpyxl (base 1)
         fila_cabecera_excel = fila_cabecera + 1
         fila_inicio_datos = fila_cabecera_excel + 1
         
-        # Actualizar cabecera con las columnas del DataFrame (incluyendo OBSERVADOS)
         cabecera_actual = []
         ultima_col_con_datos = 0
         for idx, cell in enumerate(ws[fila_cabecera_excel], start=1):
@@ -996,11 +881,8 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
                 ultima_col_con_datos = idx
         
         cabecera_df = [str(col).upper().strip() for col in df_procesado.columns]
-        
-        # Encontrar columnas nuevas que no están en la cabecera actual
         columnas_nuevas = [col for col in cabecera_df if col not in cabecera_actual]
         
-        # Agregar las columnas nuevas
         if columnas_nuevas:
             celda_referencia = ws.cell(row=fila_cabecera_excel, column=max(1, ultima_col_con_datos))
             
@@ -1008,7 +890,6 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
                 nueva_celda = ws.cell(row=fila_cabecera_excel, column=ultima_col_con_datos + idx)
                 nueva_celda.value = nueva_col
                 
-                # Copiar el estilo de la celda de referencia
                 if celda_referencia.fill:
                     nueva_celda.fill = PatternFill(
                         start_color=celda_referencia.fill.start_color,
@@ -1029,29 +910,24 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
                         vertical=celda_referencia.alignment.vertical
                     )
 
-        # Convertir TODAS las cabeceras a mayúsculas (incluyendo las existentes)
         for col_idx, col_name in enumerate(df_procesado.columns, start=1):
             celda_cabecera = ws.cell(row=fila_cabecera_excel, column=col_idx)
             celda_cabecera.value = str(col_name).upper()
         
-        # Eliminar filas de datos antiguos
         if ws.max_row >= fila_inicio_datos:
             ws.delete_rows(fila_inicio_datos, ws.max_row - fila_inicio_datos + 1)
         
-        # Insertar nuevos datos
         for r_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
             for c_idx, value in enumerate(row, start=1):
                 if pd.isna(value):
                     value = None
                 ws.cell(row=r_idx, column=c_idx, value=value)
     
-    # Guardar en BytesIO
     output = BytesIO()
     wb.save(output)
     output.seek(0)
     return output
 
-# Función para Generar Reporte PDF:
 def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
     """
     Genera reportes PDF agrupados por Grado → Sección → Curso
@@ -1063,43 +939,32 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
         tipo_archivo: '1P-3P' o '4P-5S'
     """
 
-    # Función para dibujar encabezado y pie
     def encabezado_pie_pagina(canvas, doc):
         """
         Dibuja el encabezado y pie de página en cada página
         """
         canvas.saveState()
-        
-        # Dimensiones de la página
         ancho, alto = A4
         
-        # ====== ENCABEZADO IZQUIERDO: Logo "Alianza Educativa" ======
         canvas.setFont('Helvetica-Bold', 11)
         canvas.setFillColor(colors.HexColor('#1a5490'))
         
-        # Posición del logo (esquina superior izquierda)
         x_logo = 15 * mm
         y_logo = alto - 12 * mm
         
-        # Texto "Alianza Educativa" (con salto de línea)
         canvas.drawString(x_logo, y_logo, "Alianza")
         canvas.drawString(x_logo, y_logo - 4*mm, "Educativa")
         
-        # ====== ENCABEZADO DERECHO: Logo Cibertec ======
         try:
-            # Ruta al logo de Cibertec
             logo_cibertec_path = os.path.join("logos", "logo_cibertec.jpeg")
             
             if os.path.exists(logo_cibertec_path):
-                # Dimensiones del logo (ajusta según necesites)
-                logo_width = 25 * mm   # Ancho del logo
-                logo_height = 10 * mm  # Alto del logo
+                logo_width = 25 * mm 
+                logo_height = 10 * mm 
                 
-                # Posición del logo (esquina superior derecha)
                 x_logo_cibertec = ancho - 15*mm - logo_width
                 y_logo_cibertec = alto - 12*mm - logo_height*0.5
                 
-                # Dibujar el logo
                 canvas.drawImage(
                     logo_cibertec_path,
                     x_logo_cibertec,
@@ -1110,33 +975,25 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     mask='auto'
                 )
         except Exception as e:
-            # Si hay error al cargar el logo, no hacer nada (continuar sin logo)
             pass
 
-        # Línea separadora debajo del encabezado
         canvas.setStrokeColor(colors.HexColor('#1a5490'))
         canvas.setLineWidth(0.5)
         canvas.line(15*mm, alto - 18*mm, ancho - 15*mm, alto - 18*mm)
         
         canvas.restoreState()
     
-    # GENERACIÓN DE REPORTES
     with st.spinner("📝 Generando reportes PDF..."):
-        # Crear buffer para el ZIP
         zip_buffer = BytesIO()
         
-        # Crear archivo ZIP
         with ZipFile(zip_buffer, 'w') as zip_file:
-            # Agrupar por Grado, Sección, Curso
             grupos = df.groupby(['GRADO', 'SECCIÓN', 'CURSO'])
             total_grupos = len(grupos)
             progress_bar = st.progress(0)
             
             for idx, ((grado, seccion, curso), grupo_df) in enumerate(grupos):
-                # Crear PDF individual
                 pdf_buffer = BytesIO()
                 
-                # Configurar documento con márgenes ajustados para el encabezado
                 doc = SimpleDocTemplate(
                     pdf_buffer,
                     pagesize=A4,
@@ -1146,7 +1003,6 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     bottomMargin=15*mm
                 )
                 
-                # Estilos
                 styles = getSampleStyleSheet()
                 style_title = ParagraphStyle(
                     'CustomTitle',
@@ -1173,10 +1029,8 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     alignment=TA_LEFT
                 )
                 
-                # Construir contenido
                 story = []
                 
-                # Header del contenido
                 story.append(Paragraph("NÓMINA DE ALUMNOS", style_title))
                 story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
                 story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
@@ -1184,10 +1038,8 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story.append(Paragraph(f"<b>Curso:</b> {curso}", style_subtitle))
                 story.append(Spacer(1, 5*mm))
                 
-                # Preparar datos de la tabla
                 grupo_df_sorted = grupo_df.sort_values(['PATERNO', 'MATERNO', 'NOMBRES'])
                 
-                # CALCULAR ESTADÍSTICAS CON VALORES ORIGINALES (SIN REDONDEAR)
                 total_alumnos = len(grupo_df_sorted)
                 aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
@@ -1195,17 +1047,15 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
                 promedio = round(promedio, 2)
                 
-                # CREAR TABLA CON NOTAS REDONDEADAS (SOLO PARA VISUALIZACIÓN)
                 datos_tabla = [['Nro.', 'Nombres', 'Apellido Paterno', 'Apellido Materno', 'Nota']]
                 
                 for i, (_, row) in enumerate(grupo_df_sorted.iterrows(), 1):
-                    # Redondear nota: si es >= .5, redondea hacia arriba, sino hacia abajo
                     nota_original = row['NOTA FINAL']
                     try:
                         nota_float = float(nota_original)
                         nota_redondeada = int(round(nota_float))
                     except (ValueError, TypeError):
-                        nota_redondeada = nota_original   # Si no es numérico, mantener el valor original
+                        nota_redondeada = nota_original
                     
                     datos_tabla.append([
                         str(i),
@@ -1215,10 +1065,8 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                         str(nota_redondeada)
                     ])
                 
-                # Crear tabla
                 tabla = Table(datos_tabla, colWidths=[15*mm, 50*mm, 40*mm, 40*mm, 20*mm])
                 
-                # Estilo de tabla
                 tabla.setStyle(TableStyle([
                     # Header
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a5490')),
@@ -1246,7 +1094,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story.append(tabla)
                 story.append(Spacer(1, 8*mm))
                 
-                # Footer con estadísticas
+                # Footer
                 total_alumnos = len(grupo_df_sorted)
                 aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
@@ -1260,82 +1108,64 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story.append(Paragraph(f"<b>Promedio del Aula:</b> {promedio}", style_normal))
                 story.append(Paragraph(f"<b>Aprobados:</b> {aprobados} | <b>Desaprobados:</b> {desaprobados}", style_normal))
                 
-                # GENERAR PDF CON ENCABEZADO PERSONALIZADO (Primera pasada)
                 doc.build(story, onFirstPage=encabezado_pie_pagina, onLaterPages=encabezado_pie_pagina)
                 
-                # POST-PROCESAMIENTO: Agregar paginación X/Y (Segunda pasada)
                 pdf_buffer.seek(0)
                 pdf_reader = PyPDF2.PdfReader(pdf_buffer)
                 total_paginas = len(pdf_reader.pages)
                 
-                # Crear nuevo buffer para el PDF modificado
                 pdf_final_buffer = BytesIO()
                 pdf_writer = PyPDF2.PdfWriter()
                 
-                # Agregar fecha y número de página en formato de pie de página
                 for numero_pagina in range(total_paginas):
-                    # Obtener página original
                     pagina = pdf_reader.pages[numero_pagina]
                     
-                    # Crear overlay con pie de página
                     overlay_buffer = BytesIO()
                     overlay_canvas = canvas.Canvas(overlay_buffer, pagesize=A4)
                     
-                    # Dimensiones
                     ancho, alto = A4
                     margen_izq = 15 * mm
                     margen_der = 15 * mm
-                    y_pie = 12 * mm  # Posición vertical del pie de página
+                    y_pie = 12 * mm
                     
-                    # Línea separadora ENCIMA del pie de página
                     overlay_canvas.setStrokeColor(colors.HexColor('#1a5490'))
                     overlay_canvas.setLineWidth(0.5)
                     overlay_canvas.line(margen_izq, y_pie + 4*mm, ancho - margen_der, y_pie + 4*mm)
                     
-                    # Configurar fuente y color
                     overlay_canvas.setFont('Helvetica', 9)
                     overlay_canvas.setFillColor(colors.black)
                     
-                    # Fecha a la IZQUIERDA
                     fecha_actual = datetime.now().strftime("%d/%m/%Y")
                     texto_fecha = f"Impreso: {fecha_actual}"
                     overlay_canvas.drawString(margen_izq, y_pie, texto_fecha)
                     
-                    # Número de página a la DERECHA
                     texto_pagina = f"Página {numero_pagina + 1}/{total_paginas}"
                     overlay_canvas.drawRightString(ancho - margen_der, y_pie, texto_pagina)
                     
                     overlay_canvas.save()
                     
-                    # Leer el overlay
                     overlay_buffer.seek(0)
                     overlay_pdf = PyPDF2.PdfReader(overlay_buffer)
                     overlay_page = overlay_pdf.pages[0]
                     
-                    # Combinar página original con overlay
                     pagina.merge_page(overlay_page)
                     pdf_writer.add_page(pagina)
                 
-                # Escribir PDF final
                 pdf_writer.write(pdf_final_buffer)
                 pdf_final_buffer.seek(0)
                 
-                # Guardar en ZIP
                 pdf_bytes = pdf_final_buffer.getvalue()
                 nombre_archivo = f"{grado}_{seccion}_{curso.replace('/', '-')}.pdf"
                 zip_file.writestr(nombre_archivo, pdf_bytes)
                 
-                # Actualizar progreso
                 progress_bar.progress((idx + 1) / total_grupos)
             
             progress_bar.empty()
         
-        # Preparar descarga
         zip_buffer.seek(0)
         
         st.success(f"🎉 {total_grupos} reportes PDF generados correctamente")
         
-        # Botón de descarga
         st.download_button(
             label="📥 Descargar Reportes (ZIP)",
             data=zip_buffer,
@@ -1344,7 +1174,6 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
             use_container_width=True
         )
 
-# Funciones para Tab de Evaluadores:
 def validar_notas_numericas(df):
     """
     Valida que las columnas de notas cumplan con los requisitos:
@@ -1363,24 +1192,20 @@ def validar_notas_numericas(df):
     
     for col in columnas_notas:
         if col not in df.columns:
-            continue  # Si la columna no existe, saltarla
+            continue
         
         for idx, valor in df[col].items():
-            # Convertir a string y limpiar
             valor_str = str(valor).strip().upper()
             
-            # Permitir valores vacíos, NaN, None, NP (son válidos según las reglas del comparador)
             if valor_str in ["", "NAN", "NONE", "NP"]:
                 continue
             
-            # Intentar convertir a número
             try:
                 valor_num = float(valor_str)
                 
-                # Validar que no sea negativo
                 if valor_num < 0:
                     errores.append({
-                        "fila": idx + 2,  # +2 porque idx es 0-indexed y hay cabecera
+                        "fila": idx + 2,
                         "columna": col,
                         "valor": valor_str,
                         "error": "Valor negativo no permitido",
@@ -1389,7 +1214,6 @@ def validar_notas_numericas(df):
                         "nombres": str(df.loc[idx, "NOMBRES"]) if "NOMBRES" in df.columns else ""
                     })
                 
-                # Validar que no sea mayor a 20
                 elif valor_num > 20:
                     errores.append({
                         "fila": idx + 2,
@@ -1402,7 +1226,6 @@ def validar_notas_numericas(df):
                     })
                     
             except ValueError:
-                # No se puede convertir a número
                 errores.append({
                     "fila": idx + 2,
                     "columna": col,
@@ -1436,7 +1259,6 @@ def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
     try:
         wb = load_workbook(BytesIO(archivo_bytes), data_only=True)
         
-        # Si no se especifica hoja, usar la primera
         if nombre_hoja is None:
             nombre_hoja = wb.sheetnames[0]
         
@@ -1445,63 +1267,48 @@ def leer_archivo_evaluador(archivo_bytes, nombre_hoja=None):
         
         ws = wb[nombre_hoja]
         
-        # Convertir a DataFrame
         data = []
         for row in ws.iter_rows(values_only=True):
             data.append(row)
         
         df = pd.DataFrame(data)
         
-        # Detectar cabecera usando la función existente
         fila_cabecera = detectar_cabecera_automatica(df, COLUMNAS_EVALUADOR)
         
         if fila_cabecera is None:
             return None, "No se pudo detectar la cabecera automáticamente", None, None, None
         
-        # Extraer nombres de columnas de la fila de cabecera
         nombres_columnas_raw = df.iloc[fila_cabecera].tolist()
         
-        # Limpiar nombres de columnas y manejar duplicados/None
         nombres_columnas = []
         for i, col in enumerate(nombres_columnas_raw):
             if col is None or pd.isna(col) or str(col).strip() == '' or str(col).lower() == 'nan':
-                # Si la columna es None o vacía, usar un nombre genérico
                 nombres_columnas.append(f"Columna_Extra_{i}")
             else:
-                # Limpiar espacios extras al inicio y final
                 nombres_columnas.append(str(col).strip())
         
-        # Asignar columnas limpias
         df.columns = nombres_columnas
         df = df.iloc[fila_cabecera + 1:].reset_index(drop=True)
         
-        # Eliminar columnas extras (las que no están en COLUMNAS_EVALUADOR)
         columnas_a_mantener = [col for col in df.columns if col in COLUMNAS_EVALUADOR]
         
-        # Verificar que tengamos todas las columnas requeridas
         columnas_faltantes = [col for col in COLUMNAS_EVALUADOR if col not in columnas_a_mantener]
         if columnas_faltantes:
             return None, f"No se encontraron las columnas: {', '.join(columnas_faltantes)}. Revisa que los nombres coincidan exactamente.", None, None, None
         
         df = df[columnas_a_mantener]
         
-        # Limpiar filas vacías
         df = df.dropna(how='all')
         
-        # VALIDAR NOTAS NUMÉRICAS
         es_valido, errores_validacion = validar_notas_numericas(df)
         if not es_valido:
-            # Convertir errores a DataFrame para mejor visualización
             df_errores = pd.DataFrame(errores_validacion)
             
-            # Crear columna de nombre completo
             df_errores['nombre_completo'] = df_errores['paterno'] + ' ' + df_errores['materno'] + ', ' + df_errores['nombres']
             
-            # Reordenar y renombrar columnas para presentación
             df_errores_display = df_errores[['fila', 'nombre_completo', 'columna', 'valor', 'error']].copy()
             df_errores_display.columns = ['FILA', 'NOMBRE COMPLETO', 'COLUMNA', 'VALOR', 'TIPO DE ERROR']
             
-            # Retornar None con el DataFrame de errores
             return None, None, None, None, df_errores_display
         
         return df, None, fila_cabecera, wb.sheetnames, None
@@ -1688,14 +1495,11 @@ def comparar_evaluadores(df_base, df_revisar):
 
 def agregar_columna_nro(df):
     """Agrega columna Nro. al DataFrame si no existe, o la recalcula si existe"""
-    # Eliminar columna Nro. si ya existe (por si acaso)
     if "Nro." in df.columns:
         df = df.drop(columns=["Nro."])
-    # Insertar columna Nro. al inicio
     df.insert(0, "Nro.", range(1, len(df) + 1))
     return df
 
-# Funciones para cabecera de certificados
 def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_procesadas):
     """
     Guarda archivo de certificado preservando las primeras 7 filas del formato institucional
@@ -1709,17 +1513,14 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
         BytesIO con el archivo de certificado
     """
     
-    # Cargar el workbook original para copiar el formato de las primeras 7 filas
     wb_original = load_workbook(BytesIO(archivo_original_bytes))
     
-    # Crear un nuevo workbook para el certificado
     wb_nuevo = Workbook()
-    wb_nuevo.remove(wb_nuevo.active)  # Eliminar la hoja por defecto
+    wb_nuevo.remove(wb_nuevo.active)
     
     for nombre_hoja, datos in dict_hojas_procesadas.items():
         df_procesado = datos['df']
 
-        # ORDENAR por PATERNO antes de guardar (si existe la columna)
         if 'PATERNO' in df_procesado.columns:
             columnas_orden = ['PATERNO']
             if 'MATERNO' in df_procesado.columns:
@@ -1728,30 +1529,23 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
                 columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
             df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
         
-        # Crear nueva hoja
         ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
 
-        # Referencia para el estilo de "Nombre del Colegio:"
         celda_estilo_referencia = None
         
-        # Si la hoja existe en el original, copiar las primeras 7 filas
         if nombre_hoja in wb_original.sheetnames:
             ws_original = wb_original[nombre_hoja]
             
-            # Copiar las primeras 7 filas con su formato
             for fila_idx in range(1, 8):
                 for col_idx in range(1, ws_original.max_column + 1):
                     celda_original = ws_original.cell(row=fila_idx, column=col_idx)
                     celda_nueva = ws_nueva.cell(row=fila_idx, column=col_idx)
                     
-                    # Guardar referencia del estilo de "Nombre del Colegio:" (generalmente fila 5)
                     if fila_idx == 5 and col_idx == 1 and celda_estilo_referencia is None:
                         celda_estilo_referencia = celda_original
 
-                    # Copiar valor
                     celda_nueva.value = celda_original.value
                     
-                    # Copiar formato de manera segura
                     try:
                         # Copiar fill
                         if celda_original.fill and celda_original.fill.start_color:
@@ -1810,13 +1604,13 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             
             try:
                 if celda_estilo_referencia.font:
-                    celda_evaluador.font = Font(bold=True, size=16) #copy(celda_estilo_referencia.font)
+                    celda_evaluador.font = Font(bold=True, size=16)
             except:
                 pass
             
             try:
                 if celda_estilo_referencia.alignment:
-                    celda_evaluador.alignment = Alignment(horizontal="left", vertical="center") #copy(celda_estilo_referencia.alignment)
+                    celda_evaluador.alignment = Alignment(horizontal="left", vertical="center")
             except:
                 pass
             
@@ -1829,10 +1623,9 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             celda_evaluador.font = Font(bold=True, size=10)
             celda_evaluador.alignment = Alignment(horizontal="left", vertical="center")
         
-        # Agregar cabecera personalizada (OK) en fila 9
+        # Agregar cabecera personalizada
         fila_cabecera = 9
         
-        # Estilo para la cabecera
         header_fill = PatternFill(start_color="002060", end_color="002060", fill_type="solid")
         header_font = Font(color="FFFFFF", bold=True, size=10)
         header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -1844,7 +1637,6 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             celda.font = header_font
             celda.alignment = header_alignment
         
-        # Agregar datos a partir de la fila 10
         fila_inicio_datos = 10
         for row_idx, row in enumerate(dataframe_to_rows(df_procesado, index=False, header=False), start=fila_inicio_datos):
             for col_idx, value in enumerate(row, start=1):
@@ -1852,19 +1644,16 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
                 celda.value = value
                 celda.alignment = Alignment(horizontal="center", vertical="center")
         
-        # Ajustar ancho de columnas
         for col_idx, columna in enumerate(df_procesado.columns, start=1):
             col_letter = ws_nueva.cell(row=1, column=col_idx).column_letter
             ws_nueva.column_dimensions[col_letter].width = 15
     
-    # Guardar en BytesIO
     buffer = BytesIO()
     wb_nuevo.save(buffer)
     buffer.seek(0)
     
     return buffer
 
-# Funciones de CERTIFICADOS PDF
 def register_custom_font():
     """Registra la fuente Trebuchet MS si está disponible"""
     font_path = os.path.join("fonts", "trebuchet.ttf")
@@ -1882,7 +1671,6 @@ def register_custom_font():
 TREBUCHET_AVAILABLE = register_custom_font()
 styles_config = None
 
-# Diccionario de meses
 def mes_en_espanol(fecha):
     meses = {
         'January': 'enero',
@@ -1903,7 +1691,6 @@ def mes_en_espanol(fecha):
     mes_espanol = meses.get(mes_ingles, mes_ingles)
     return fecha.strftime(f"%d de {mes_espanol} del %Y")
 
-# Función para agregar marca de agua (PDF)
 def agregar_marca_agua(pdf_bytes, watermark_path):
     try:
         pdf_reader = PyPDF2.PdfReader(pdf_bytes)
@@ -1916,12 +1703,10 @@ def agregar_marca_agua(pdf_bytes, watermark_path):
         for page_num in range(len(pdf_reader.pages)):
             page = pdf_reader.pages[page_num]
             
-            # Determinar orientación de la página
             page_width = float(page.mediabox.width)
             page_height = float(page.mediabox.height)
             is_landscape = page_width > page_height
             
-            # Crear una copia de la marca de agua para no modificar la original
             if is_landscape:
                 landscape_watermark_path = os.path.join("watermarks", "marca_agua_landscape.pdf")
                 if os.path.exists(landscape_watermark_path):
@@ -1944,7 +1729,6 @@ def agregar_marca_agua(pdf_bytes, watermark_path):
         st.error(f"Error al aplicar marca de agua: {e}")
         return pdf_bytes
 
-# Función para cargar plantillas
 def cargar_plantillas():
     """Carga las plantillas de fondo desde la carpeta plantillas"""
     plantillas = {}
@@ -1975,7 +1759,6 @@ def cargar_plantillas():
         st.error(f"❌ Se necesitan 4 plantillas, solo se encontraron {len(plantillas)}")
         return None
 
-# Función para clasificar estudiantes por criterios
 def clasificar_estudiantes_por_nota(df, tipo_certificado):
     """
     Clasifica estudiantes según el tipo de certificado seleccionado.
@@ -2024,7 +1807,6 @@ def clasificar_estudiantes_por_nota(df, tipo_certificado):
 
     return grupos
 
-# Función Tab4
 def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
     """
     Valida que el DataFrame tenga las columnas esperadas del usuario y las mapea
@@ -2036,7 +1818,6 @@ def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
     
     Retorna: (df_mapeado, exito, mensaje)
     """
-    # Columnas esperadas del archivo del usuario
     columnas_esperadas = [
         "NRO.", "PATERNO", "MATERNO", "NOMBRE", "GRADO", "SECCIÓN", "CURSO", 
         "NOTA LABORATORIO", "¿ASISTIÓ?", "P1 4PTOS.", "P2 4PTOS.", "P3 4PTOS.", 
@@ -2044,13 +1825,8 @@ def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
         "ESTATUS", "NUMERACIÓN"
     ]
     
-    # Normalizar nombres de columnas del DataFrame (strip espacios)
     df.columns = df.columns.str.strip()
-    
-    # Verificar que todas las columnas esperadas estén presentes
     columnas_faltantes = [col for col in columnas_esperadas if col not in df.columns]
-    
-    # Solo validar HORAS PROGRESIVO si el tipo es "Progresivo"
     requiere_horas_progresivo = tipo_certificado == "Progresivo"
     
     if requiere_horas_progresivo and "HORAS PROGRESIVO" not in df.columns:
@@ -2062,7 +1838,6 @@ def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
             mensaje_error += "\n\n💡 Nota: La columna 'HORAS PROGRESIVO' es requerida cuando se selecciona el tipo 'Progresivo'."
         return None, False, mensaje_error
     
-    # Mapeo de columnas del usuario a las que espera la función
     mapeo_columnas = {
         "NRO.": "nro",
         "PATERNO": "paterno",
@@ -2086,40 +1861,29 @@ def validar_y_mapear_columnas(df, tipo_certificado="Regular"):
         "OBSERVADOS", "ESTATUS", "NUMERACIÓN"
     ]
 
-    # Agregar HORAS PROGRESIVO al mapeo y orden si existe en el DataFrame
     tiene_horas_progresivo = "HORAS PROGRESIVO" in df.columns
     if tiene_horas_progresivo:
         mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
         orden_final.append("HORAS PROGRESIVO")
     
-    # Seleccionar solo las columnas que necesitamos y renombrarlas
     columnas_a_mantener = [col for col in orden_final if col in df.columns]
     df_filtrado = df[columnas_a_mantener].copy()
     
-    # Si no tiene HORAS PROGRESIVO pero es necesaria, crear columna vacía
     if not tiene_horas_progresivo and not requiere_horas_progresivo:
-        # Para tipos no progresivos, agregar columna vacía para mantener compatibilidad
         df_filtrado["HORAS PROGRESIVO"] = ""
         orden_final.append("HORAS PROGRESIVO")
     
-    # Reordenar columnas
     df_filtrado = df_filtrado[orden_final]
-
-    # Crear 10 filas vacías con las mismas columnas
     filas_vacias = pd.DataFrame(columns=df_filtrado.columns, index=range(10))
 
-    # Agregar una fila con los nombres de columnas mapeados (la que será el encabezado)
-    # Actualizar mapeo_columnas con horas_progresivo si existe
     if tiene_horas_progresivo:
         mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
     elif "HORAS PROGRESIVO" in orden_final:
-        # Si se agregó columna vacía, también agregar al mapeo
         mapeo_columnas["HORAS PROGRESIVO"] = "horas_progresivo"
     
     nombres_mapeados = [mapeo_columnas.get(col, col.lower()) for col in orden_final]
     fila_encabezado = pd.DataFrame([nombres_mapeados], columns=df_filtrado.columns)
     
-    # Concatenar: 10 filas vacías + fila de encabezado + datos
     df_formateado = pd.concat([filas_vacias, fila_encabezado, df_filtrado], ignore_index=True)
 
     return df_formateado, True, "✅ Columnas validadas y mapeadas correctamente"
@@ -2132,23 +1896,18 @@ def detectar_fila_encabezado(df):
     palabras_clave = ['paterno', 'materno', 'nombre', 'nro', 'grado', 'sección', 'curso', 'nota final']
     
     for idx, row in df.iterrows():
-        # Convertir toda la fila a string y minúsculas
         row_str = ' '.join(str(val).lower() for val in row if pd.notna(val))
-        
-        # Si encuentra al menos 4 palabras clave, asume que es el encabezado
         coincidencias = sum(1 for palabra in palabras_clave if palabra in row_str)
         if coincidencias >= 4:
             return idx
     
     return None
 
-# Función para procesar el archivo Excel Base
 def procesar_excel_inicial(uploaded_file):
     """
     Procesa el archivo Excel eliminando las primeras 9 filas y columnas J-N y desde la T
     """
     try:
-        # Lista de columnas
         columnas_requeridas = [
             "nro", "paterno", "materno", "nombre", "grado", "sección", "curso", 
             "nota lab", "lista de asistencia", "nota de examen cibertec", "nota final", 
@@ -2156,32 +1915,21 @@ def procesar_excel_inicial(uploaded_file):
         ]
         
         df_original = pd.read_excel(uploaded_file)
-
-        # Eliminar las primeras 11 filas (índices 0-10, quedando la fila 12 como cabecera)
         df_procesado = df_original.iloc[10:].copy()
-
-        # Resetear el índice para que la nueva primera fila sea el índice 0
         df_procesado = df_procesado.reset_index(drop=True)
-
-        # Usar la primera fila como cabecera (Antigua fila 12)
         df_procesado.columns = df_procesado.iloc[0].str.lower()
         df_procesado = df_procesado.drop(df_procesado.index[0]).reset_index(drop=True)
-        
-        # Filtrar solo las columnas requeridas que existen en el dataframe
         columnas_existentes = [col for col in columnas_requeridas if col in df_procesado.columns]
         df_procesado = df_procesado[columnas_existentes]
 
-        # Reemplazar 'NP' por 0 en la columna 'nota final'
         if 'nota final' in df_procesado.columns:
             df_procesado['nota final'] = df_procesado['nota final'].apply(
                 lambda x: 0 if isinstance(x, str) and x.strip().upper() == 'NP' else x
             )
 
-        # Crear columna nombre_certificado
         df_procesado['nombre_certificado'] = df_procesado['nombre'].fillna('').str.strip() + ' ' + df_procesado[
             'paterno'].fillna('').str.strip() + ' ' + df_procesado['materno'].fillna('').str.strip()
 
-        # Reordenar columnas para poner nombre_certificado después de nro
         if 'nro' in df_procesado.columns:
             columnas = df_procesado.columns.tolist()
             columnas.remove('nombre_certificado')
@@ -2194,7 +1942,6 @@ def procesar_excel_inicial(uploaded_file):
     except Exception as e:
         return None, False, f"Error al procesar el archivo: {str(e)}"
 
-# Acomodar el texto en múltiples líneas para que se ajuste al ancho máximo
 def wrap_text_to_width(canvas, text, font_name, font_size, max_width_mm):
     max_width_points = max_width_mm * 2.83465
     words = text.split()
@@ -2220,7 +1967,6 @@ def wrap_text_to_width(canvas, text, font_name, font_size, max_width_mm):
 
     return lines
 
-# Dibuja texto multilínea usando la configuración de estilos específica
 def draw_multiline_text(canvas, text, style_key, page_width, styles_config, max_width_mm=None):
     style = styles_config[style_key]
     font_name = style['font_family'] if TREBUCHET_AVAILABLE else 'Helvetica'
@@ -2271,25 +2017,20 @@ def draw_multiline_text(canvas, text, style_key, page_width, styles_config, max_
 
     return line_height * len(lines)
 
-# Genera certificados para un grupo específico con su plantilla y estilos correspondientes
 def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_grupo, zip_file, progress_bar,
     estudiantes_base, total_estudiantes, styles_config_by_template):
     certificados_generados = 0
 
-    # Aplicar marca de agua si el usuario lo seleccionó y no es certificado de participación (fondo_2)
     usar_marca_agua = st.session_state.get('usar_marca_agua_seleccionado', False)
     aplicar_marca_agua = usar_marca_agua and plantilla_key != 'fondo_2'
     
-    # Ruta a la marca de agua
     watermark_path = os.path.join("watermarks", "marca_agua.pdf")
     if aplicar_marca_agua and not os.path.exists(watermark_path):
         st.warning(f"⚠️ No se encontró el archivo de marca de agua en {watermark_path}. Se generarán PDFs sin marca de agua.")
         aplicar_marca_agua = False
 
-    # Obtener la configuración de estilos para esta plantilla
     styles_config = styles_config_by_template[plantilla_key]
 
-    # Determinar orientación de página según la plantilla
     if styles_config.get('orientation') == 'portrait':
         page_size = A4
         page_width, page_height = A4
@@ -2302,13 +2043,10 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
             nombre = str(row["nombre_certificado"]).strip().upper()
             curso = str(row["curso"]).strip().upper()
 
-            # Obtener la fecha seleccionada por el usuario desde session_state
             fecha_seleccionada = st.session_state.get('fecha_certificado_seleccionada', datetime.now().date())
-            # Convertir date a datetime si es necesario
             if isinstance(fecha_seleccionada, datetime):
                 fecha_para_certificado = fecha_seleccionada
             else:
-                # Si es un objeto date, convertirlo a datetime
                 fecha_para_certificado = datetime.combine(fecha_seleccionada, datetime.min.time())
             
             fecha = mes_en_espanol(fecha_para_certificado)
@@ -2318,31 +2056,23 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
                 else f"GEN-{i + 1:03}"
             )
 
-            # Extraer valores para la variable de horas, sólo si es para "Progresivos" (fondo_1)
             horas = "horas_progresivo"
             horas_progresivo = ""
             if plantilla_key == 'fondo_1' and horas in row and pd.notnull(row[horas]):
                 horas_progresivo = str(row[horas])
 
-            # Crear archivo temporal con la plantilla
             with NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                 tmp_img.write(plantilla_bytes)
                 tmp_img.flush()
                 tmp_img_path = tmp_img.name
 
-            # Crear PDF con orientación específica
             pdf_buffer = BytesIO()
             c = canvas.Canvas(pdf_buffer, pagesize=page_size)
-
-            # Insertar imagen de fondo
             c.drawImage(tmp_img_path, 0, 0, width=page_width, height=page_height)
-
-            # Dibujar texto usando los estilos específicos de la plantilla
             draw_multiline_text(c, nombre, 'nombre', page_width, styles_config, styles_config['nombre']['max_width'])
             draw_multiline_text(c, curso, 'curso', page_width, styles_config, styles_config['curso']['max_width'])
             draw_multiline_text(c, f"Lima, {fecha}", 'fecha', page_width, styles_config)
 
-            # Se considera la variable horas si es para el fondo_1
             if plantilla_key == 'fondo_1' and horas_progresivo:
                 draw_multiline_text(c, horas_progresivo, 'horas', page_width, styles_config)
             
@@ -2352,12 +2082,10 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
             c.save()
             pdf_bytes = pdf_buffer.getvalue()
 
-            # Aplicar marca de agua si es necesario
             if aplicar_marca_agua:
                 pdf_buffer = agregar_marca_agua(BytesIO(pdf_bytes), watermark_path)
                 pdf_bytes = pdf_buffer.getvalue()
 
-            # Añadir al ZIP
             if plantilla_key == 'fondo_2':
                 pdf_name = f"Constancias/{nombre.strip().replace(' ', '_') + '_' + curso[0:11].replace(' ', '_')}.pdf"
             else:
@@ -2367,11 +2095,9 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
 
             certificados_generados += 1
 
-            # Actualizar progreso
             progreso_actual = (estudiantes_base + certificados_generados) / total_estudiantes
             progress_bar.progress(min(progreso_actual, 1.0))
 
-            # Limpiar archivo temporal
             try:
                 if os.path.exists(tmp_img_path):
                     os.unlink(tmp_img_path)
@@ -2383,7 +2109,6 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
 
     return certificados_generados
 
-# Función para generar todos los certificados
 def generar_todos_certificados():
     if st.session_state.grupos and st.session_state.plantillas:
         st.info("Generando certificados por grupos...")
@@ -2395,16 +2120,14 @@ def generar_todos_certificados():
         zip_buffer = BytesIO()
 
         with ZipFile(zip_buffer, "a") as zip_file:
-            # Crear directorio para constancias
             zip_file.writestr("Constancias/", "")
 
-            # Configuración de estilos
             styles_config_by_template = {
             "fondo_1": {
                 'curso': {
                     'font_family': 'Trebuchet',
                     'font_size': 32,
-                    'color': '#000000', #11959f
+                    'color': '#000000',
                     'x': 52,
                     'y': 129,
                     'max_width': 220,
@@ -2413,7 +2136,7 @@ def generar_todos_certificados():
                 'nombre': {
                     'font_family': 'Trebuchet',
                     'font_size': 25,
-                    'color': '#000000', #004064
+                    'color': '#000000',
                     'x': 52,
                     'y': 85,
                     'max_width': 210
@@ -2443,7 +2166,7 @@ def generar_todos_certificados():
                     'y': 65.2,
                     'max_width': None
                 },
-                'orientation': 'landscape'  # Orientación horizontal
+                'orientation': 'landscape'
             },
             "fondo_2": {  # Vertical
                 'curso': {
@@ -2481,7 +2204,7 @@ def generar_todos_certificados():
                     'y': 0,
                     'max_width': None
                 },
-                'orientation': 'portrait'  # Orientación vertical
+                'orientation': 'portrait'
             },
             "fondo_3": {
                 'curso': {
@@ -2561,7 +2284,6 @@ def generar_todos_certificados():
             }
         }
 
-            # Mapeo de grupos a plantillas
             mapeo_plantillas = {
                 'grupo_1': 'fondo_1',  # Progresiva
                 'grupo_2': 'fondo_2',  # Participación Nota < 12.5
@@ -2576,7 +2298,6 @@ def generar_todos_certificados():
 
                     st.write(f"Procesando {grupo_nombre} ({len(grupo_df)} estudiantes) con plantilla {plantilla_key}...")
 
-                    # Generar certificados pasando la configuración de estilos
                     certificados_gen = generar_certificados_grupo(
                         grupo_df,
                         plantilla_bytes,
@@ -2602,7 +2323,6 @@ def generar_todos_certificados():
         return True
     return False
 
-# Función de centrado para Tab05
 def ajustar_texto_inteligente(draw, text, font_path, font_size_inicial, max_width, max_height, 
                                min_font_size=20, line_spacing=1.2):
     """
@@ -2690,13 +2410,11 @@ def draw_centered_text_adaptive(draw, text, x_center, y_center, font_path,
     Dibuja texto centrado con ajuste automático de tamaño y división en líneas.
     """
     
-    # Ajustar el texto al espacio disponible
     lineas, fuente_final = ajustar_texto_inteligente(
         draw, text, font_path, font_size_inicial, 
         max_width, max_height, min_font_size, line_spacing
     )
     
-    # Calcular dimensiones de cada línea
     lineas_info = []
     for linea in lineas:
         bbox = draw.textbbox((0, 0), linea, font=fuente_final)
@@ -2704,16 +2422,13 @@ def draw_centered_text_adaptive(draw, text, x_center, y_center, font_path,
         height = bbox[3] - bbox[1]
         lineas_info.append({'text': linea, 'width': width, 'height': height})
     
-    # Calcular el alto total del bloque de texto
     if len(lineas_info) == 1:
         total_height = lineas_info[0]['height']
     else:
         total_height = sum(info['height'] for info in lineas_info) * line_spacing
     
-    # Posición Y inicial (ajustada para centrar verticalmente el bloque completo)
     y_actual = y_center - (total_height / 2)
     
-    # Dibujar cada línea centrada horizontalmente
     for i, info in enumerate(lineas_info):
         x_pos = x_center - (info['width'] / 2)
         draw.text((x_pos, y_actual), info['text'], fill=fill, font=fuente_final)
@@ -2736,31 +2451,18 @@ def draw_centered_text(draw, text, x_position, y_position, font, fill="white"):
     y_position = y_position - (text_height) / 2
     draw.text((x_position, y_position), text, fill=fill, font=font)
 
-# ================================================
-# INTERFAZ PRINCIPAL CON TABS
-# ================================================
 
 st.title("📊 Sistema de Validación de Archivos")
 
-# Crear tabs principales
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Validador de Nóminas", "⚖️ Validador de Evaluaciones", "📑 Generador de Resultados PDF", "🎓 Generador de Certificados PDF", "📛 Generador de Insignias"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Validador de Nóminas", "⚖️ Validador Evaluaciones de Alumnos", "📑 Generador de Planilla de Resultados", "🎓 Generador de Diplomas, Certificados y Constancias", "🏅 Generador de Insignias (Docente y Alumno)"])
 
-# ================================================
 # TAB 1: VALIDADOR GENERAL
-# ================================================
 with tab1:
-    # ================================================
-    # INTERFAZ PRINCIPAL
-    # ================================================
     st.markdown("## 🔍 Validador de Nóminas")
     st.markdown("### Sistema de Homologación de Datos")
 
-    # Mostrar stepper
     mostrar_stepper(st.session_state.paso_actual)
 
-    # ================================================
-    # PASO 0: Nombre DEL COLEGIO
-    # ================================================
     if st.session_state.paso_actual == 0:
         st.header("🏫 Paso 1: Información del Colegio")
 
@@ -2796,11 +2498,8 @@ with tab1:
                 else:
                     st.error("Por favor, ingresa el Nombre del colegio")
 
-    # ================================================
-    # PASO 1: ARCHIVO 1 (NÓMINA)
-    # ================================================
+    # NÓMINA
     elif st.session_state.paso_actual == 1:
-        # Mostrar resumen del paso anterior
         with st.expander("✅ Paso 1 completado: Nombre del Colegio", expanded=False):
             st.info(f"**Colegio:** {st.session_state.nombre_colegio}")
             if st.button("🔄 Cambiar Nombre", key="cambiar_nombre"):
@@ -2826,7 +2525,6 @@ with tab1:
             )
             
             if archivo is not None:
-                # GUARDAR BYTES ORIGINALES
                 st.session_state.archivo1_bytes = archivo.getvalue()
                 with st.spinner("🔍 Analizando archivo..."):
                     try:
@@ -2834,13 +2532,10 @@ with tab1:
                         fila_detectada = detectar_cabecera_automatica(df_original, COLUMNAS_ARCHIVO1)
                         
                         if fila_detectada is not None:
-                            # GUARDAR ÍNDICE DE CABECERA
                             st.session_state.archivo1_fila_cabecera = fila_detectada
                             st.success(f"✅ Cabecera detectada automáticamente en la fila {fila_detectada + 1}")
                             
                             df = pd.read_excel(archivo, header=fila_detectada)
-                            
-                            # Procesar columnas
                             columnas_norm = {c.strip().lower(): c for c in df.columns}
                             cols_a_usar = []
                             for col_req in COLUMNAS_ARCHIVO1:
@@ -2851,20 +2546,15 @@ with tab1:
                             df = df[cols_a_usar]
                             df.columns = [col.upper() for col in COLUMNAS_ARCHIVO1]
 
-                            # Eliminar filas con campos vacíos en PATERNO, MATERNO y NOMBRES
                             df = limpiar_filas_vacias(df, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
 
-                            # Si el DataFrame quedó vacío, mostrar error y detener
                             if df.empty:
                                 st.error("❌ La hoja seleccionada no contiene datos válidos después de limpiar filas vacías")
                                 st.stop()
                             
                             df = convertir_numericas_a_entero(df, columnas=["GRADO"])
-
-                            # Convertir numéricas a enteros
                             df = homologar_dataframe(df)
 
-                            # Validar campos vacíos en PATERNO, MATERNO o NOMBRES
                             columnas_obligatorias = ["PATERNO", "MATERNO", "NOMBRES"]
                             filas_vacias = df[df[columnas_obligatorias].isnull().any(axis=1)]
 
@@ -2873,49 +2563,38 @@ with tab1:
                                 st.dataframe(filas_vacias, use_container_width=True)
                                 st.stop()
                             
-                            # Validaciones para Archivo 1 (nómina)
                             errores_fatales = []
                             alertas = []
                             
-                            # Validar y mapear grados
                             df, errores_grados = validar_y_mapear_grados(df, "GRADO")
                             errores_fatales.extend(errores_grados)
                             
-                            # Validar sexo
                             errores_sexo = validar_sexo(df, "SEXO (M/F)")
                             alertas.extend(errores_sexo)
                             
-                            # Validar secciones
                             errores_secciones = validar_secciones(df, "SECCIÓN")
                             errores_fatales.extend(errores_secciones)
 
-                            # Validar neurodiversidad
                             errores_neuro = validar_neurodiversidad(df, "NEURODIVERSIDAD (SÍ/NO)")
                             alertas.extend(errores_neuro)
                             
-                            # Validar fecha
                             errores_fecha = validar_fecha_nacimiento(df, "NACIMIENTO (DD/MM/YYYY)")
                             alertas.extend(errores_fecha)
                             
-                            # Validar DNI
                             errores_dni = validar_dni(df, "DNI")
                             alertas.extend(errores_dni)
                             
-                            # Validar correo
                             errores_correo = validar_correo(df, "CORREO INSTITUCIONAL")
                             alertas.extend(errores_correo)
                             
-                            # Mostrar errores si existen
                             if errores_fatales:
                                 st.error("❌ Se encontraron errores de validación:")
-                                # Convertir lista de alertas a DataFrame
                                 df_errores_fatales = pd.DataFrame(errores_fatales, columns=["Detalle de los errores críticos"])
                                     
-                                # Mostrar tabla scrolleable
                                 st.dataframe(
                                     df_errores_fatales,
                                     use_container_width=True,
-                                    height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                    height=220
                                 )
                                     
                                 st.caption(f"🔎 Total de errores: {len(errores_fatales)}")
@@ -2929,14 +2608,12 @@ with tab1:
                                 if alertas:
                                     st.warning("⚠️ Se detectaron advertencias en los datos (no bloquean el proceso):")
                                     with st.expander("Ver alertas detalladas", expanded=True):
-                                        # Convertir lista de alertas a DataFrame
                                         df_alertas = pd.DataFrame(alertas, columns=["Detalle de la Alerta"])
                                         
-                                        # Mostrar tabla scrolleable
                                         st.dataframe(
                                             df_alertas,
                                             use_container_width=True,
-                                            height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                            height=220
                                         )
                                         
                                         st.caption(f"🔎 Total de alertas: {len(alertas)}")
@@ -2944,24 +2621,20 @@ with tab1:
                                     st.success("✅ Todas las validaciones pasaron correctamente")
 
                             if not errores_fatales:
-                                # Mostrar preview
                                 st.markdown("### 📊 Vista Previa de Datos")
                                 st.info(f"Total de registros: {len(df)}")
                                 st.dataframe(df, use_container_width=True, hide_index=True)
-                            
-                            # Botones de acción
+
                             col1, col2 = st.columns(2)
                             with col1:
                                 df_descarga = df.drop(columns=["IDENTIFICADOR", "Nº"], errors="ignore")
-
-                                # Limpieza de NAN inline
                                 df_descarga = df_descarga.fillna("")
                                 df_descarga = df_descarga.replace(["NAN", "nan", "NaN"], "")
 
                                 buffer = guardar_con_formato_original(
                                     df_procesado=df_descarga,
                                     archivo_original_bytes=st.session_state.archivo1_bytes,
-                                    nombre_hoja=None,  # Usar primera hoja
+                                    nombre_hoja=None,
                                     fila_cabecera=st.session_state.archivo1_fila_cabecera
                                 )
                                 st.download_button(
@@ -3005,10 +2678,8 @@ with tab1:
                                     df = df[cols_a_usar]
                                     df.columns = [col.upper() for col in COLUMNAS_ARCHIVO1]
                                     
-                                    # Homologar datos
                                     df = homologar_dataframe(df)
                                     
-                                    # Validar campos vacíos en PATERNO, MATERNO o NOMBRES
                                     columnas_obligatorias = ["PATERNO", "MATERNO", "NOMBRES"]
                                     filas_vacias = df[df[columnas_obligatorias].isnull().any(axis=1)]
 
@@ -3017,49 +2688,38 @@ with tab1:
                                         st.dataframe(filas_vacias, use_container_width=True)
                                         st.stop()
                                     
-                                    # Validaciones para Archivo 1 (nómina)
                                     errores_fatales = []
                                     alertas = []
                                     
-                                    # Validar y mapear grados
                                     df, errores_grados = validar_y_mapear_grados(df, "GRADO")
                                     errores_fatales.extend(errores_grados)
                                     
-                                    # Validar sexo
                                     errores_sexo = validar_sexo(df, "SEXO (M/F)")
                                     alertas.extend(errores_sexo)
                                     
-                                    # Validar secciones
                                     errores_secciones = validar_secciones(df, "SECCIÓN")
                                     errores_fatales.extend(errores_secciones)
 
-                                    # Validar neurodiversidad
                                     errores_neuro = validar_neurodiversidad(df, "NEURODIVERSIDAD (SÍ/NO)")
                                     alertas.extend(errores_neuro)
                                     
-                                    # Validar fecha
                                     errores_fecha = validar_fecha_nacimiento(df, "NACIMIENTO (DD/MM/YYYY)")
                                     alertas.extend(errores_fecha)
                                     
-                                    # Validar DNI
                                     errores_dni = validar_dni(df, "DNI")
                                     alertas.extend(errores_dni)
                                     
-                                    # Validar correo
                                     errores_correo = validar_correo(df, "CORREO INSTITUCIONAL")
                                     alertas.extend(errores_correo)
                                     
-                                    # Mostrar errores si existen
                                     if errores_fatales:
                                         st.error("❌ Se encontraron errores de validación:")
-                                        # Convertir lista de alertas a DataFrame
                                         df_errores_fatales = pd.DataFrame(errores_fatales, columns=["Detalle de la Alerta"])
                                             
-                                        # Mostrar tabla scrolleable
                                         st.dataframe(
                                             df_errores_fatales,
                                             use_container_width=True,
-                                            height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                            height=220
                                         )
                                             
                                         st.caption(f"🔎 Total de errores: {len(errores_fatales)}")
@@ -3073,14 +2733,12 @@ with tab1:
                                         if alertas:
                                             st.warning("⚠️ Se detectaron advertencias en los datos (no bloquean el proceso):")
                                             with st.expander("Ver alertas detalladas", expanded=True):
-                                                # Convertir lista de alertas a DataFrame
                                                 df_alertas = pd.DataFrame(alertas, columns=["Detalle de la Alerta"])
                                                 
-                                                # Mostrar tabla scrolleable
                                                 st.dataframe(
                                                     df_alertas,
                                                     use_container_width=True,
-                                                    height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                                    height=220
                                                 )
                                                 
                                                 st.caption(f"🔎 Total de alertas: {len(alertas)}")
@@ -3088,24 +2746,20 @@ with tab1:
                                             st.success("✅ Todas las validaciones pasaron correctamente")
 
                                     if not errores_fatales:
-                                        # Mostrar preview
                                         st.markdown("### 📊 Vista Previa de Datos")
                                         st.info(f"Total de registros: {len(df)}")
                                         st.dataframe(df, use_container_width=True, hide_index=True)
                                     
-                                    # Botones de acción
                                     col1, col2 = st.columns(2)
                                     with col1:
                                         df_descarga = df.drop(columns=["IDENTIFICADOR", "Nº"], errors="ignore")
-
-                                        # Limpieza de NAN inline
                                         df_descarga = df_descarga.fillna("")
                                         df_descarga = df_descarga.replace(["NAN", "nan", "NaN"], "")
 
                                         buffer = guardar_con_formato_original(
                                             df_procesado=df_descarga,
                                             archivo_original_bytes=st.session_state.archivo1_bytes,
-                                            nombre_hoja=None,  # Usar primera hoja
+                                            nombre_hoja=None,
                                             fila_cabecera=st.session_state.archivo1_fila_cabecera
                                         )
                                         st.download_button(
@@ -3125,11 +2779,8 @@ with tab1:
                     except Exception as e:
                         st.error(f"❌ Error al procesar el archivo: {e}")
 
-    # ================================================
-    # PASO 2: ARCHIVO 2 (NOTAS)
-    # ================================================
+    # NOTAS
     elif st.session_state.paso_actual == 2:
-        # Mostrar resumen de pasos anteriores
         with st.expander("✅ Pasos completados", expanded=False):
             st.success(f"**Colegio:** {st.session_state.nombre_colegio}")
             st.success(f"**Archivo 1:** {len(st.session_state.archivo1_df)} registros cargados")
@@ -3139,7 +2790,6 @@ with tab1:
         
         st.header("📊 Paso 3: Archivo de Notas de Cursos")
         
-        # Equivalencias de cursos
         with st.expander("⚙️ Configuración de Cursos Equivalentes", expanded=False):
             st.markdown("""
             <div style='background-color: #78808C; padding: 15px; border-radius: 10px;'>
@@ -3154,7 +2804,6 @@ with tab1:
                 st.session_state.cursos_equivalentes = sorted(list(set(st.session_state.cursos_equivalentes + nuevos)))
                 st.success(f"✅ {len(nuevos)} cursos agregados. Total: {len(st.session_state.cursos_equivalentes)}")
         
-        # Carga del archivo
         st.markdown("""
         <div style='background-color: #78808C; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
             <h4>📄 Instrucciones</h4>
@@ -3172,15 +2821,11 @@ with tab1:
         archivo2 = st.file_uploader("Selecciona el archivo Excel de notas", type=["xls", "xlsx"])
         
         if archivo2 is not None:
-            # GUARDAR BYTES ORIGINALES
             st.session_state.archivo2_bytes = archivo2.getvalue()
             with st.spinner("🔍 Analizando archivo y hojas disponibles..."):
                 try:
-                    # Leer el archivo para detectar hojas
                     xls_file = pd.ExcelFile(archivo2)
                     hojas_disponibles = xls_file.sheet_names
-                    
-                    # Detectar qué hojas existen
                     tiene_1p3p = "1P-3P" in hojas_disponibles
                     tiene_4p5s = "4P-5S" in hojas_disponibles
                     
@@ -3189,7 +2834,6 @@ with tab1:
                         st.info(f"Hojas encontradas: {', '.join(hojas_disponibles)}")
                         st.stop()
                     
-                    # Mostrar información de hojas detectadas
                     st.success(f"✅ Hojas detectadas en el archivo, Únicas Opciones ('1P-3P' o '4P-5S'):")
                     cols_info = st.columns(2)
                     with cols_info[0]:
@@ -3201,9 +2845,7 @@ with tab1:
                     
                     st.divider()
                     
-                    # ====================================
                     # PROCESAR HOJA 1P-3P (Solo mayúsculas)
-                    # ====================================
                     df_1p3p_procesado = None
                     df_vp_1p3p = None
 
@@ -3214,13 +2856,11 @@ with tab1:
                         fila_detectada_1p3p = detectar_cabecera_automatica(df_1p3p_original, COLUMNAS_ARCHIVO2_1P3P)
                         
                         if fila_detectada_1p3p is not None:
-                            # GUARDAR ÍNDICE DE CABECERA
                             st.session_state.archivo2_1p3p_fila_cabecera = fila_detectada_1p3p
                             st.success(f"✅ Cabecera detectada en la fila {fila_detectada_1p3p + 1}")
                             
                             df_1p3p = pd.read_excel(archivo2, sheet_name="1P-3P", header=fila_detectada_1p3p)
                             
-                            # Procesar columnas
                             columnas_norm = {c.strip().lower(): c for c in df_1p3p.columns}
                             cols_a_usar = []
                             for col_req in COLUMNAS_ARCHIVO2_1P3P:
@@ -3230,19 +2870,11 @@ with tab1:
                             
                             df_1p3p = df_1p3p[cols_a_usar]
                             df_1p3p.columns = [col.upper() for col in COLUMNAS_ARCHIVO2_1P3P]
-                            
-                            # Eliminar filas con campos vacíos en PATERNO, MATERNO y NOMBRES
                             df_1p3p = limpiar_filas_vacias(df_1p3p, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
 
-                            # Si la hoja tiene datos, procesarla; si no, omitirla
                             if not df_1p3p.empty:
-                                # Convertir numéricas a enteros
                                 df_1p3p = convertir_numericas_a_entero(df_1p3p, columnas=["GRADO", "NOTA VIGESIMAL 100%"])
-
-                                # Homologar datos
                                 df_1p3p = homologar_dataframe(df_1p3p)
-
-                                # Validar campos vacíos en PATERNO, MATERNO o NOMBRES
                                 columnas_obligatorias = ["PATERNO", "MATERNO", "NOMBRES"]
                                 filas_vacias = df_1p3p[df_1p3p[columnas_obligatorias].isnull().any(axis=1)]
 
@@ -3251,27 +2883,20 @@ with tab1:
                                     st.dataframe(filas_vacias, use_container_width=True)
                                     st.stop()
                                 
-                                # Validaciones para Archivo 2 - Hoja 1P-3P
                                 errores_validacion_1p3p = []
 
-                                # Completar valores vacíos en NOTA VIGESIMAL con "NP"
                                 if "NOTA VIGESIMAL 100%" in df_1p3p.columns:
                                     df_1p3p["NOTA VIGESIMAL 100%"] = df_1p3p["NOTA VIGESIMAL 100%"].fillna("NP").replace("", "NP")
 
-                                # Validar y mapear grados
                                 df_1p3p, errores_grados = validar_y_mapear_grados(df_1p3p, "GRADO", tipo_validacion="1p3p")
                                 errores_validacion_1p3p.extend(errores_grados)
-                                
-                                # Validar secciones
                                 errores_secciones = validar_secciones(df_1p3p, "SECCIÓN")
                                 errores_validacion_1p3p.extend(errores_secciones)
                                 
-                                # Mostrar errores de validación si existen
                                 if errores_validacion_1p3p:
                                     st.error("❌ Errores de validación en 1P-3P:")
                                     df_errores_fatales_1p3p = pd.DataFrame(errores_validacion_1p3p, columns=["Detalle de los errores críticos"])
                                         
-                                    # Mostrar tabla scrolleable
                                     st.dataframe(
                                         df_errores_fatales_1p3p,
                                         use_container_width=True,
@@ -3284,7 +2909,6 @@ with tab1:
                                 else:
                                     st.success("✅ Validaciones de grados y secciones pasadas (1P-3P)")
                                 
-                                # Validar cursos en 1P-3P
                                 cursos_invalidos_1p3p = sorted(df_1p3p.loc[~df_1p3p["CURSO"].isin(st.session_state.cursos_equivalentes), "CURSO"].unique())
                                 
                                 if len(cursos_invalidos_1p3p) > 0 and st.session_state.archivo2_1p3p_df is None:
@@ -3308,44 +2932,32 @@ with tab1:
                                             if any(v == "-- Seleccionar --" for v in equivalencias_1p3p.values()):
                                                 st.error("❌ Debes seleccionar un curso para todos los campos")
                                             else:
-                                                # Aplicar equivalencias
                                                 for curso_err, curso_ok in equivalencias_1p3p.items():
                                                     df_1p3p.loc[df_1p3p["CURSO"] == curso_err, "CURSO"] = curso_ok
                                                 
-                                                # Agregar solo IDENTIFICADOR
                                                 df_1p3p["IDENTIFICADOR"] = crear_identificador(df_1p3p, "PATERNO", "MATERNO", "NOMBRES")
-                                                
-                                                # Reordenar
                                                 cols_orden = [c for c in df_1p3p.columns if c != "IDENTIFICADOR"]
                                                 cols_orden.append("IDENTIFICADOR")
                                                 df_1p3p = df_1p3p[cols_orden]
                                                 
-                                                # Guardar en session_state
                                                 st.session_state.archivo2_1p3p_df = df_1p3p
                                                 st.success("✅ Cursos homologados correctamente en 1P-3P")
                                                 st.rerun()
                                 
-                                # Si no hay cursos inválidos
                                 else:
-                                    # Usar el DataFrame guardado si existe, sino usar el actual
                                     if st.session_state.archivo2_1p3p_df is not None:
                                         df_1p3p = st.session_state.archivo2_1p3p_df
                                     else:
-                                        # Agregar solo IDENTIFICADOR
                                         df_1p3p["IDENTIFICADOR"] = crear_identificador(df_1p3p, "PATERNO", "MATERNO", "NOMBRES")
-                                        
-                                        # Reordenar
                                         cols_orden = [c for c in df_1p3p.columns if c != "IDENTIFICADOR"]
                                         cols_orden.append("IDENTIFICADOR")
                                         df_1p3p = df_1p3p[cols_orden]
                                         
                                         st.session_state.archivo2_1p3p_df = df_1p3p
                                     
-                                    # Marcar como procesado
                                     df_1p3p_procesado = df_1p3p
                                     df_vp_1p3p = df_1p3p.copy().drop(columns=["Nro."], errors="ignore")
 
-                                    # Vista previa
                                     st.dataframe(df_vp_1p3p, use_container_width=True, hide_index=True)
                             
                         else:
@@ -3355,9 +2967,7 @@ with tab1:
                             st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 100%")
                             st.stop()
                     
-                    # ====================================
                     # PROCESAR HOJA 4P-5S (Homologación completa)
-                    # ====================================
                     df_4p5s_procesado = None
                     df_vp_4p5s = None
 
@@ -3368,13 +2978,11 @@ with tab1:
                         fila_detectada2 = detectar_cabecera_automatica(df_original2, COLUMNAS_ARCHIVO2_4P5S)
                         
                         if fila_detectada2 is not None:
-                            # GUARDAR ÍNDICE DE CABECERA
                             st.session_state.archivo2_4p5s_fila_cabecera = fila_detectada2
                             st.success(f"✅ Cabecera detectada en la fila {fila_detectada2 + 1}")
                             
                             df2 = pd.read_excel(archivo2, sheet_name="4P-5S", header=fila_detectada2)
                         
-                            # Procesar columnas
                             columnas_norm = {c.strip().lower(): c for c in df2.columns}
                             cols_a_usar = []
                             for col_req in COLUMNAS_ARCHIVO2_4P5S:
@@ -3384,39 +2992,28 @@ with tab1:
                             
                             df2 = df2[cols_a_usar]
                             df2.columns = [col.upper() for col in COLUMNAS_ARCHIVO2_4P5S]
-
-                            # Eliminar filas con campos vacíos en PATERNO, MATERNO y NOMBRES
                             df2 = limpiar_filas_vacias(df2, columnas_clave=["PATERNO", "MATERNO", "NOMBRES"])
 
-                            # Si la hoja tiene datos, procesarla; si no, omitirla
                             if not df2.empty:
-                                # Convertir numéricas a enteros
                                 df2 = convertir_numericas_a_entero(df2, columnas=["GRADO", "NOTA VIGESIMAL 25%"])
-
-                                # Homologar datos
                                 df2 = homologar_dataframe(df2)
-
-                                # Validaciones para Archivo 2 - Hoja 4P-5S
+                                
                                 errores_validacion_4p5s = []
 
-                                # Validar y mapear grados
                                 df2, errores_grados = validar_y_mapear_grados(df2, "GRADO", tipo_validacion="4p5s")
                                 errores_validacion_4p5s.extend(errores_grados)
 
-                                # Validar secciones
                                 errores_secciones = validar_secciones(df2, "SECCIÓN")
                                 errores_validacion_4p5s.extend(errores_secciones)
 
-                                # Mostrar errores de validación si existen
                                 if errores_validacion_4p5s:
                                     st.error("❌ Errores de validación en 4P-5S:")
                                     df_errores_fatales_4p5s = pd.DataFrame(errores_validacion_4p5s, columns=["Detalle de los errores críticos"])
                                             
-                                    # Mostrar tabla scrolleable
                                     st.dataframe(
                                         df_errores_fatales_4p5s,
                                         use_container_width=True,
-                                        height=220  # ajusta la altura visible (unas 5-6 filas aprox)
+                                        height=220
                                     )
                                             
                                     st.caption(f"🔎 Total de errores: {len(errores_validacion_4p5s)}")
@@ -3426,11 +3023,9 @@ with tab1:
                                 else:
                                     st.success("✅ Validaciones de grados y secciones pasadas (4P-5S)")
 
-                                # Completar valores vacíos en NOTA VIGESIMAL 25% con "NP"
                                 if "NOTA VIGESIMAL 25%" in df2.columns:
                                     df2["NOTA VIGESIMAL 25%"] = df2["NOTA VIGESIMAL 25%"].fillna("NP").replace("", "NP")
-                                
-                                # Validar campos vacíos
+
                                 columnas_oblig = ["PATERNO", "MATERNO", "NOMBRES", "CURSO", "GRADO", "SECCIÓN", "NOTA VIGESIMAL 25%"]
                                 filas_vacias = df2[df2[columnas_oblig].isnull().any(axis=1)]
                                 
@@ -3439,10 +3034,8 @@ with tab1:
                                     st.dataframe(filas_vacias, use_container_width=True)
                                     st.stop()
                                 
-                                # Validar cursos
                                 cursos_invalidos = sorted(df2.loc[~df2["CURSO"].isin(st.session_state.cursos_equivalentes), "CURSO"].unique())
                                 
-                                # Si hay cursos inválidos
                                 if len(cursos_invalidos) > 0 and st.session_state.archivo2_4p5s_df is None:
                                     st.warning(f"⚠️ Se detectaron {len(cursos_invalidos)} cursos no reconocidos")
                                     
@@ -3464,27 +3057,22 @@ with tab1:
                                             if any(v == "-- Seleccionar --" for v in equivalencias.values()):
                                                 st.error("❌ Debes seleccionar un curso para todos los campos")
                                             else:
-                                                # Aplicar equivalencias
                                                 for curso_err, curso_ok in equivalencias.items():
                                                     df2.loc[df2["CURSO"] == curso_err, "CURSO"] = curso_ok
                                                 
-                                                # Guardar en session_state
                                                 df2["IDENTIFICADOR"] = crear_identificador(df2, "PATERNO", "MATERNO", "NOMBRES")
                                                 df2["NOTAS VIGESIMALES 75%"] = ""
                                                 df2["PROMEDIO"] = ""
                                                 
-                                                # Reordenar columnas
                                                 cols_orden = [c for c in df2.columns if c != "IDENTIFICADOR"]
                                                 cols_orden.append("IDENTIFICADOR")
                                                 df2 = df2[cols_orden]
                                                 
-                                                # Guardar en session_state
                                                 st.session_state.archivo2_4p5s_df = df2
                                                 
                                                 st.success("✅ Cursos homologados correctamente")
                                                 st.rerun()
                                 else:
-                                    # Usar el DataFrame guardado si existe, sino procesar el actual
                                     if st.session_state.archivo2_4p5s_df is not None:
                                         df2 = st.session_state.archivo2_4p5s_df
                                     else:
@@ -3492,19 +3080,15 @@ with tab1:
                                         df2["NOTAS VIGESIMALES 75%"] = ""
                                         df2["PROMEDIO"] = ""
                                         
-                                        # Reordenar columnas
                                         cols_orden = [c for c in df2.columns if c != "IDENTIFICADOR"]
                                         cols_orden.append("IDENTIFICADOR")
                                         df2 = df2[cols_orden]
                                         
-                                        # Guardar en session_state
                                         st.session_state.archivo2_4p5s_df = df2
                                         
-                                    # Marcar como procesado
                                     df_4p5s_procesado = df2
                                     df_vp_4p5s = df2.copy().drop(columns=["Nro.", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
                                     
-                                    # Vista previa
                                     st.dataframe(df_vp_4p5s, use_container_width=True, hide_index=True)
                         else:
                             st.error("❌ Error de cabecera en la hoja 4P-5S")
@@ -3513,11 +3097,7 @@ with tab1:
                             st.code("NRO., PATERNO, MATERNO, NOMBRES, CURSO, GRADO, SECCIÓN, NOTA VIGESIMAL 25%")
                             st.stop()
 
-                    # ====================================
-                    # SECCIÓN DE DESCARGA
-                    # ====================================
-
-                    # Validación de hojas procesadas
+                    # DESCARGA
                     hoja_1p3p_lista = df_1p3p_procesado is not None and st.session_state.archivo2_1p3p_df is not None
                     hoja_4p5s_lista = df_4p5s_procesado is not None and st.session_state.archivo2_4p5s_df is not None
 
@@ -3525,17 +3105,15 @@ with tab1:
                         st.divider()
                         st.markdown("### 💾 Archivos Listos para Descargar")
                         
-                        # ========== SECCIÓN 1P-3P ==========
+                        # SECCIÓN 1P-3P
                         if hoja_1p3p_lista:
                             st.markdown("#### 📘 Archivos 1P-3P")
                             
-                            # Preparar DataFrames para 1P-3P
                             df_eval_1p3p_completo, _ = crear_archivo_evaluador(
                                 st.session_state.archivo1_df,
                                 df_1p3p_procesado
                             )
                             
-                            # Preparar archivos individuales
                             dict_hojas_1p3p = {
                                 "1P-3P": {
                                     'df': df_eval_1p3p_completo.drop(columns=["IDENTIFICADOR"], errors="ignore"),
@@ -3543,7 +3121,6 @@ with tab1:
                                 }
                             }
                             
-                            # Filtros para 1P-3P
                             df_1p3p_actual = df_eval_1p3p_completo.copy()
                             
                             df_1p3p_observados = df_eval_1p3p_completo[
@@ -3566,7 +3143,6 @@ with tab1:
                                     df_1p3p_ok = df_1p3p_ok.drop(columns=['NRO.'])
                                 df_1p3p_ok.insert(0, 'NRO.', range(1, len(df_1p3p_ok) + 1))
                             
-                            # Tres columnas para botones 1P-3P
                             col_1p3p_0, col_1p3p_1, col_1p3p_2, col_1p3p_3 = st.columns(4)
                             
                             with col_1p3p_0:
@@ -3589,7 +3165,7 @@ with tab1:
                                 )
 
                             with col_1p3p_1:
-                                # ACTUAL 1P-3P
+                                # Actual 1P-3P
                                 dict_actual_1p3p = {
                                     "1P-3P": {
                                         'df': df_1p3p_actual.drop(columns=["IDENTIFICADOR"], errors="ignore"),
@@ -3611,7 +3187,7 @@ with tab1:
                                 )
                             
                             with col_1p3p_2:
-                                # OBSERVADOS 1P-3P
+                                # Observados 1P-3P
                                 if len(df_1p3p_observados) > 0:
                                     dict_observados_1p3p = {
                                         "1P-3P": {
@@ -3639,14 +3215,10 @@ with tab1:
                                 # OK 1P-3P
                                 if len(df_1p3p_ok) > 0:
                                     
-                                    # Resetear índice
                                     df_1p3p_ok = df_1p3p_ok.reset_index(drop=True)
-                                    
-                                    # Normalizar nombres de columnas
                                     df_1p3p_ok.columns = df_1p3p_ok.columns.str.strip()
-                                    
-                                    # Mapear columnas a formato certificado
                                     mapeo_columnas = {}
+
                                     for col in df_1p3p_ok.columns:
                                         col_upper = col.upper().strip()
                                         
@@ -3669,7 +3241,6 @@ with tab1:
                                     
                                     df_1p3p_ok = df_1p3p_ok.rename(columns=mapeo_columnas)
                                     
-                                    # Eliminar columnas no necesarias
                                     columnas_a_eliminar = []
                                     for col in df_1p3p_ok.columns:
                                         col_upper = col.upper()
@@ -3678,7 +3249,6 @@ with tab1:
                                     
                                     df_1p3p_ok = df_1p3p_ok.drop(columns=columnas_a_eliminar, errors='ignore')
                                     
-                                    # Agregar columnas nuevas para certificado 1P-3P
                                     nuevas_columnas = [
                                         '¿ASISTIÓ?', 'P1 4PTOS.', 
                                         'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
@@ -3689,7 +3259,6 @@ with tab1:
                                         if col not in df_1p3p_ok.columns:
                                             df_1p3p_ok[col] = ''
                                     
-                                    # Reordenar columnas específicas para 1P-3P
                                     columnas_certificado_1p3p = [
                                         'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                                         'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
@@ -3699,18 +3268,15 @@ with tab1:
                                     columnas_existentes = [col for col in columnas_certificado_1p3p if col in df_1p3p_ok.columns]
                                     df_1p3p_ok = df_1p3p_ok[columnas_existentes]
 
-                                    # COPIAR NOTA LABORATORIO en NOTA FINAL
                                     if "NOTA LABORATORIO" in df_1p3p_ok.columns and "NOTA FINAL" in df_1p3p_ok.columns:
                                         df_1p3p_ok["NOTA FINAL"] = pd.to_numeric(df_1p3p_ok["NOTA LABORATORIO"], errors="coerce")
 
-                                    # CALCULAR ESTATUS
                                     if "ESTATUS" in df_1p3p_ok.columns and "NOTA FINAL" in df_1p3p_ok.columns:
                                         nota_final = pd.to_numeric(df_1p3p_ok["NOTA FINAL"], errors="coerce")
                                         df_1p3p_ok["ESTATUS"] = nota_final.apply(
                                             lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
                                         )
 
-                                    # Regenerar Nro secuencial
                                     if 'NRO.' in df_1p3p_ok.columns:
                                         df_1p3p_ok['NRO.'] = range(1, len(df_1p3p_ok) + 1)
                                     
@@ -3737,17 +3303,15 @@ with tab1:
                             
                             st.divider()
                         
-                        # ========== SECCIÓN 4P-5S ==========
+                        # SECCIÓN 4P-5S
                         if hoja_4p5s_lista:
                             st.markdown("#### 📗 Archivos 4P-5S")
                             
-                            # Preparar DataFrames para 4P-5S
                             _, df_eval_4p5s_completo = crear_archivo_evaluador(
                                 st.session_state.archivo1_df,
                                 df_4p5s_procesado
                             )
                             
-                            # Filtros para 4P-5S
                             df_4p5s_actual = df_eval_4p5s_completo.copy()
                             
                             df_4p5s_observados = df_eval_4p5s_completo[
@@ -3766,13 +3330,9 @@ with tab1:
                             ].copy()
                             
                             if len(df_4p5s_ok) > 0:
-                                # Resetear índice y regenerar NRO.
                                 df_4p5s_ok = df_4p5s_ok.reset_index(drop=True)
-                                
-                                # Normalizar nombres de columnas
                                 df_4p5s_ok.columns = df_4p5s_ok.columns.str.strip()
                                 
-                                # Mapear columnas a formato certificado
                                 mapeo_columnas = {}
                                 for col in df_4p5s_ok.columns:
                                     col_upper = col.upper().strip()
@@ -3796,7 +3356,6 @@ with tab1:
                                 
                                 df_4p5s_ok = df_4p5s_ok.rename(columns=mapeo_columnas)
                                 
-                                # Eliminar columnas no necesarias
                                 columnas_a_eliminar = []
                                 for col in df_4p5s_ok.columns:
                                     col_upper = col.upper()
@@ -3807,7 +3366,6 @@ with tab1:
                                 
                                 df_4p5s_ok = df_4p5s_ok.drop(columns=columnas_a_eliminar, errors='ignore')
                                 
-                                # Agregar columnas nuevas para certificado
                                 nuevas_columnas = [
                                     '¿ASISTIÓ?', 'P1 4PTOS.', 
                                     'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
@@ -3818,7 +3376,6 @@ with tab1:
                                     if col not in df_4p5s_ok.columns:
                                         df_4p5s_ok[col] = ''
                                 
-                                # Reordenar columnas
                                 columnas_certificado = [
                                     'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                                     'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
@@ -3828,18 +3385,9 @@ with tab1:
                                 columnas_existentes = [col for col in columnas_certificado if col in df_4p5s_ok.columns]
                                 df_4p5s_ok = df_4p5s_ok[columnas_existentes]
 
-                                # CALCULAR ESTATUS
-                                #if "ESTATUS" in df_4p5s_ok.columns and "NOTA FINAL" in df_4p5s_ok.columns:
-                                #    nota_final = pd.to_numeric(df_4p5s_ok["NOTA FINAL"], errors="coerce")
-                                #    df_4p5s_ok["ESTATUS"] = nota_final.apply(
-                                #        lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
-                                #    )
-                                
-                                # Regenerar Nro secuencial
                                 if 'NRO.' in df_4p5s_ok.columns:
                                     df_4p5s_ok['NRO.'] = range(1, len(df_4p5s_ok) + 1)
                             
-                            # Tres columnas para botones 4P-5S
                             col_1p3p_0, col_4p5s_1, col_4p5s_2, col_4p5s_3 = st.columns(4)
                             
                             with col_1p3p_0:
@@ -3862,7 +3410,7 @@ with tab1:
                                 )
 
                             with col_4p5s_1:
-                                # ACTUAL 4P-5S
+                                # Actual 4P-5S
                                 dict_actual_4p5s = {
                                     "4P-5S": {
                                         'df': df_4p5s_actual.drop(columns=["IDENTIFICADOR", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore"),
@@ -3884,7 +3432,7 @@ with tab1:
                                 )
                             
                             with col_4p5s_2:
-                                # OBSERVADOS 4P-5S
+                                # Observados 4P-5S
                                 if len(df_4p5s_observados) > 0:
                                     dict_observados_4p5s = {
                                         "4P-5S": {
@@ -3934,7 +3482,7 @@ with tab1:
                             
                             st.divider()
                         
-                        # ========== SECCIÓN DE DESCARGA COMPLETA ==========
+                        # DESCARGA
                         st.markdown("#### 📦 Descarga Completa")
                         st.caption("Descarga todos los archivos procesados en un solo ZIP")
                         
@@ -3991,16 +3539,10 @@ with tab1:
                                     
                                     # 4. OK (si existen)
                                     if len(df_1p3p_ok) > 0:
-                                        # Preparar df_1p3p_ok con el mismo procesamiento que el botón individual
                                         df_1p3p_ok_zip = df_1p3p_ok.copy()
-                                        
-                                        # Resetear índice
                                         df_1p3p_ok_zip = df_1p3p_ok_zip.reset_index(drop=True)
-                                        
-                                        # Normalizar nombres de columnas
                                         df_1p3p_ok_zip.columns = df_1p3p_ok_zip.columns.str.strip()
                                         
-                                        # Mapear columnas a formato certificado
                                         mapeo_columnas = {}
                                         for col in df_1p3p_ok_zip.columns:
                                             col_upper = col.upper().strip()
@@ -4024,7 +3566,6 @@ with tab1:
                                         
                                         df_1p3p_ok_zip = df_1p3p_ok_zip.rename(columns=mapeo_columnas)
                                         
-                                        # Eliminar columnas no necesarias
                                         columnas_a_eliminar = []
                                         for col in df_1p3p_ok_zip.columns:
                                             col_upper = col.upper()
@@ -4033,7 +3574,6 @@ with tab1:
                                         
                                         df_1p3p_ok_zip = df_1p3p_ok_zip.drop(columns=columnas_a_eliminar, errors='ignore')
                                         
-                                        # Agregar columnas nuevas para certificado 1P-3P
                                         nuevas_columnas = [
                                             '¿ASISTIÓ?', 'P1 4PTOS.', 
                                             'P2 4PTOS.', 'P3 4PTOS.', 'P4 4PTOS.', 'P5 4PTOS.',
@@ -4044,7 +3584,6 @@ with tab1:
                                             if col not in df_1p3p_ok_zip.columns:
                                                 df_1p3p_ok_zip[col] = ''
                                         
-                                        # Reordenar columnas específicas para 1P-3P
                                         columnas_certificado_1p3p = [
                                             'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                                             'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 
@@ -4054,18 +3593,15 @@ with tab1:
                                         columnas_existentes = [col for col in columnas_certificado_1p3p if col in df_1p3p_ok_zip.columns]
                                         df_1p3p_ok_zip = df_1p3p_ok_zip[columnas_existentes]
 
-                                        # COPIAR NOTA LABORATORIO en NOTA FINAL
                                         if "NOTA LABORATORIO" in df_1p3p_ok_zip.columns and "NOTA FINAL" in df_1p3p_ok_zip.columns:
                                             df_1p3p_ok_zip["NOTA FINAL"] = pd.to_numeric(df_1p3p_ok_zip["NOTA LABORATORIO"], errors="coerce")
 
-                                        # CALCULAR ESTATUS
                                         if "ESTATUS" in df_1p3p_ok_zip.columns and "NOTA FINAL" in df_1p3p_ok_zip.columns:
                                             nota_final = pd.to_numeric(df_1p3p_ok_zip["NOTA FINAL"], errors="coerce")
                                             df_1p3p_ok_zip["ESTATUS"] = nota_final.apply(
                                                 lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
                                             )
 
-                                        # Regenerar Nro secuencial
                                         if 'NRO.' in df_1p3p_ok_zip.columns:
                                             df_1p3p_ok_zip['NRO.'] = range(1, len(df_1p3p_ok_zip) + 1)
                                         
@@ -4083,8 +3619,7 @@ with tab1:
                                 
                                 zip_1p3p_buffer.seek(0)
                                 
-                                # Contar archivos incluidos
-                                archivos_1p3p = 2  # Homologado + ACTUAL
+                                archivos_1p3p = 2
                                 if len(df_1p3p_observados) > 0:
                                     archivos_1p3p += 1
                                 if len(df_1p3p_ok) > 0:
@@ -4152,7 +3687,6 @@ with tab1:
                                     
                                     # 4. OK (si existen)
                                     if len(df_4p5s_ok) > 0:
-                                        # Usar copia del DataFrame ya procesado
                                         df_4p5s_ok_zip = df_4p5s_ok.copy()
                                         
                                         dict_ok_4p5s = {
@@ -4169,7 +3703,6 @@ with tab1:
                                 
                                 zip_4p5s_buffer.seek(0)
                                 
-                                # Contar archivos incluidos
                                 archivos_4p5s = 2  # Homologado + ACTUAL
                                 if len(df_4p5s_observados) > 0:
                                     archivos_4p5s += 1
@@ -4189,7 +3722,6 @@ with tab1:
                         
                         st.divider()
 
-                        # Botón de finalización
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
                             if st.button("✅ Finalizar Proceso", type="primary", use_container_width=True):
@@ -4202,9 +3734,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
 
-    # ================================================
-    # PASO 3: FINALIZACIÓN
-    # ================================================
+    # FINALIZACIÓN
     elif st.session_state.paso_actual == 3:
 
         st.markdown("""
@@ -4231,7 +3761,6 @@ with tab1:
         with col2:
             st.markdown("### 🔄 Acciones")
             if st.button("🆕 Procesar Nuevo Colegio", type="primary", use_container_width=True):
-                # Reiniciar todo
                 st.session_state.paso_actual = 0
                 st.session_state.nombre_colegio = ""
                 st.session_state.archivo1_df = None
@@ -4247,24 +3776,27 @@ with tab1:
                 st.session_state.paso_actual = 2
                 st.rerun()
 
-# ================================================
 # TAB 2: COMPARADOR DE EVALUADORES
-# ================================================
 with tab2:
-    st.markdown("## ⚖️ Validador de Evaluaciones")
-    st.markdown("### Comparación de Archivos Evaluadores (Formato Certificados)")
+    st.markdown("## ⚖️ Validador Evaluaciones de Alumnos")
+    st.markdown("""
+                **DESCRIPCIÓN:**
+                
+                Permite validar que el archivo devuelto por el evaluador corresponda exactamente al archivo originalmente enviado, verificando que no se hayan realizado modificaciones al contenido y que la única información agregada sean las notas u observaciones del proceso de evaluación.
+                """)
     st.info("""
-    📌 **Instrucciones:**
-    - Formato tipo "{NombreColegio}_4P-5S_OK.xlsx"
-    - Sube el archivo **OK** (puede tener campos vacíos en: NOTA EVALUADOR, P1-P5 4PTOS., NOTA FINAL)
-    - Sube el archivo **OK_EVALUADOR** (debe tener completos: NOTA EVALUADOR y NOTA FINAL)
-    - **Validaciones automáticas:**
-      * NOTA EVALUADOR debe ser la suma de P1 + P2 + P3 + P4 + P5
-      * NOTA FINAL debe ser: (NOTA LABORATORIO * 0.25) + (NOTA EVALUADOR * 0.75)
-    - Los alumnos, cursos y notas de laboratorio deben coincidir exactamente
+    📌 **INSTRUCCIONES**
+    1.	Formato tipo "{NombreColegio}_4P-5S_OK.xlsx"
+    2.	Sube el archivo OK (puede tener campos vacíos en: NOTA EVALUADOR, P1-P5 4PTOS., NOTA FINAL)
+    3.	Sube el archivo OK_EVALUADOR (debe tener completos: NOTA EVALUADOR y NOTA FINAL)
+            
+    📌 **VALIDACIONES AUTOMÁTICAS**
+    1.	NOTA EVALUADOR debe ser la suma de P1 + P2 + P3 + P4 + P5
+    2.	NOTA FINAL debe ser: (NOTA LABORATORIO * 0.25) + (NOTA EVALUADOR * 0.75)
+    3.	El orden de los alumnos, cursos y notas de laboratorio enviados inicialmente al evaluador deben coincidir exactamente, sino saldrá una advertencia
+
     """)
     
-    # Definir columnas esperadas para formato OK/Certificados
     COLUMNAS_CERTIFICADO = [
         'NRO.', 'PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO',
         'NOTA LABORATORIO', '¿ASISTIÓ?', 'P1 4PTOS.', 'P2 4PTOS.', 'P3 4PTOS.',
@@ -4272,7 +3804,6 @@ with tab2:
         'OBSERVADOS', 'ESTATUS', 'NUMERACIÓN'
     ]
     
-    # Función auxiliar para leer archivos certificado
     def leer_archivo_certificado(archivo_bytes, nombre_hoja=None, es_ok_evaluador=False):
         """
         Lee un archivo certificado Excel y retorna DataFrame validado.
@@ -4298,7 +3829,6 @@ with tab2:
             
             ws = wb[nombre_hoja]
             
-            # Convertir a DataFrame
             data = []
             for row in ws.iter_rows(values_only=True):
                 data.append(row)
@@ -4319,14 +3849,10 @@ with tab2:
             if fila_cabecera is None:
                 return None, "No se detectó la cabecera del formato certificado", None, None, None
             
-            # Usar fila como cabecera
             df.columns = df.iloc[fila_cabecera]
             df = df.iloc[fila_cabecera + 1:].reset_index(drop=True)
-            
-            # Normalizar nombres de columnas
             df.columns = df.columns.astype(str).str.strip().str.upper()
             
-            # Verificar columnas requeridas
             columnas_faltantes = []
             for col_req in ['PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 
                            'NOTA LABORATORIO', 'P1 4PTOS.', 'P2 4PTOS.', 'P3 4PTOS.',
@@ -4337,21 +3863,18 @@ with tab2:
             if columnas_faltantes:
                 return None, f"Columnas faltantes: {', '.join(columnas_faltantes)}", None, None, None
             
-            # Limpiar filas vacías
             df = df.dropna(how='all')
             df = df[df[['PATERNO', 'MATERNO', 'NOMBRE']].notna().all(axis=1)]
             
             if df.empty:
                 return None, "No hay datos válidos en el archivo", None, None, None
             
-            # ============================================================
-            # VALIDACIÓN SIMPLIFICADA: Identificar filas con errores
-            # ============================================================
+            # Validación simple
             columnas_numericas = ['NOTA LABORATORIO', 'P1 4PTOS.', 'P2 4PTOS.', 'P3 4PTOS.',
                                  'P4 4PTOS.', 'P5 4PTOS.', 'NOTA EVALUADOR', 'NOTA FINAL']
             
-            filas_con_errores_indices = set()  # Set para guardar índices de filas con errores
-            errores_por_fila = {}  # Dict para guardar tipos de errores por fila
+            filas_con_errores_indices = set()  
+            errores_por_fila = {} 
             
             for col in columnas_numericas:
                 if col not in df.columns:
@@ -4361,7 +3884,6 @@ with tab2:
                     valor_str = str(valor).strip().upper()
                     es_vacio = valor_str in ["", "NAN", "NONE", "NAT", "NULL"] or pd.isna(valor)
                     
-                    # Inicializar dict para esta fila si no existe
                     if idx not in errores_por_fila:
                         errores_por_fila[idx] = {
                             'NOTA_EVALUADOR_VACIA': False,
@@ -4372,8 +3894,6 @@ with tab2:
                             'VALOR_NO_NUMERICO': False
                         }
                     
-                    # Validar campos vacíos en NOTA EVALUADOR y NOTA FINAL
-                    # SOLO si es archivo OK_EVALUADOR (debe tener estos campos completos)
                     if es_ok_evaluador:
                         if col == 'NOTA EVALUADOR' and es_vacio:
                             filas_con_errores_indices.add(idx)
@@ -4385,39 +3905,31 @@ with tab2:
                             errores_por_fila[idx]['NOTA_FINAL_VACIA'] = True
                             continue
                     
-                    # Para archivo OK o columnas opcionales, saltar valores vacíos
                     if es_vacio:
                         continue
                     
-                    # Validar que sea numérico
                     try:
                         valor_num = float(valor_str)
                         
-                        # Validar negativos
                         if valor_num < 0:
                             filas_con_errores_indices.add(idx)
                             errores_por_fila[idx]['VALOR_NEGATIVO'] = True
                         
-                        # Validar mayor a 20
                         if valor_num > 20:
                             filas_con_errores_indices.add(idx)
                             errores_por_fila[idx]['VALOR_MAYOR_20'] = True
                         
-                        # Validar límite de 4 puntos en P1-P5
                         if col.startswith('P') and col.endswith('4PTOS.') and valor_num > 4:
                             filas_con_errores_indices.add(idx)
                             errores_por_fila[idx]['P1_P5_MAYOR_4'] = True
                             
                     except ValueError:
-                        # Valor no numérico
                         filas_con_errores_indices.add(idx)
                         errores_por_fila[idx]['VALOR_NO_NUMERICO'] = True
             
-            # Si hay filas con errores, retornar esas filas completas con columnas de tipo de error
             if filas_con_errores_indices:
                 df_filas_con_errores = df.loc[list(filas_con_errores_indices)].copy()
                 
-                # Agregar columnas de tipo de error
                 for idx in df_filas_con_errores.index:
                     df_filas_con_errores.loc[idx, 'ERROR: NOTA EVALUADOR VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_EVALUADOR_VACIA', False) else ''
                     df_filas_con_errores.loc[idx, 'ERROR: NOTA FINAL VACÍA'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOTA_FINAL_VACIA', False) else ''
@@ -4426,7 +3938,6 @@ with tab2:
                     df_filas_con_errores.loc[idx, 'ERROR: P1-P5 MAYOR A 4'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('P1_P5_MAYOR_4', False) else ''
                     df_filas_con_errores.loc[idx, 'ERROR: VALOR NO NUMÉRICO'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('VALOR_NO_NUMERICO', False) else ''
                 
-                # Ordenar por índice para mantener el orden original
                 df_filas_con_errores = df_filas_con_errores.sort_index()
                 return None, None, fila_cabecera, wb.sheetnames, df_filas_con_errores
             
@@ -4435,7 +3946,6 @@ with tab2:
         except Exception as e:
             return None, f"Error al leer archivo: {str(e)}", None, None, None
     
-    # Función de comparación simplificada
     def comparar_certificados(df_base, df_revisar):
         """
         Compara dos archivos certificados.
@@ -4444,19 +3954,16 @@ with tab2:
         Returns:
             DataFrame con filas que tienen errores o None si no hay errores
         """
-        # Normalizar columnas
         df_base.columns = df_base.columns.str.strip().str.upper()
         df_revisar.columns = df_revisar.columns.str.strip().str.upper()
         
         filas_con_errores_indices = set()
-        errores_por_fila = {}  # Dict para guardar tipos de errores por fila
+        errores_por_fila = {}
         
-        # 1. Verificar mismo número de filas
         if len(df_base) != len(df_revisar):
             st.error(f"❌ Los archivos tienen diferente número de filas: BASE={len(df_base)}, REVISAR={len(df_revisar)}")
             return None
         
-        # 2. Comparar datos de identificación
         columnas_identidad = ['PATERNO', 'MATERNO', 'NOMBRE', 'GRADO', 'SECCIÓN', 'CURSO', 'NOTA LABORATORIO']
         
         for idx in range(len(df_base)):
@@ -4480,7 +3987,6 @@ with tab2:
                 val_base = str(df_base.loc[idx, col]).strip().upper()
                 val_revisar = str(df_revisar.loc[idx, col]).strip().upper()
                 
-                # Normalizar vacíos
                 if val_base in ["", "NAN", "NONE"]:
                     val_base = ""
                 if val_revisar in ["", "NAN", "NONE"]:
@@ -4489,7 +3995,6 @@ with tab2:
                 if val_base != val_revisar:
                     filas_con_errores_indices.add(idx)
                     
-                    # Marcar el tipo específico de error
                     if col in ['PATERNO', 'MATERNO', 'NOMBRE']:
                         errores_por_fila[idx]['NOMBRES_NO_COINCIDEN'] = True
                     elif col == 'GRADO':
@@ -4501,11 +4006,9 @@ with tab2:
                     elif col == 'NOTA LABORATORIO':
                         errores_por_fila[idx]['NOTA_LAB_NO_COINCIDE'] = True
         
-        # Si hay errores de identidad, retornar ahora
         if filas_con_errores_indices:
             df_errores = df_revisar.loc[list(filas_con_errores_indices)].copy()
             
-            # Agregar columnas de tipo de error ESPECÍFICAS
             for idx in df_errores.index:
                 df_errores.loc[idx, 'ERROR: NOMBRES NO COINCIDEN'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOMBRES_NO_COINCIDEN', False) else ''
                 df_errores.loc[idx, 'ERROR: GRADO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('GRADO_NO_COINCIDE', False) else ''
@@ -4520,7 +4023,6 @@ with tab2:
             df_errores = df_errores.sort_index()
             return df_errores
         
-        # 3. Validar campos completos en OK_EVALUADOR
         for idx in range(len(df_revisar)):
             if idx not in errores_por_fila:
                 errores_por_fila[idx] = {
@@ -4559,7 +4061,6 @@ with tab2:
                 filas_con_errores_indices.add(idx)
                 errores_por_fila[idx]['NOTA_FINAL_VACIA'] = True
         
-        # 4. Validaciones matemáticas
         for idx in range(len(df_revisar)):
             if idx not in errores_por_fila:
                 errores_por_fila[idx] = {
@@ -4575,7 +4076,6 @@ with tab2:
                 }
             
             try:
-                # Obtener valores numéricos
                 p1 = pd.to_numeric(df_revisar.loc[idx, 'P1 4PTOS.'], errors='coerce')
                 p2 = pd.to_numeric(df_revisar.loc[idx, 'P2 4PTOS.'], errors='coerce')
                 p3 = pd.to_numeric(df_revisar.loc[idx, 'P3 4PTOS.'], errors='coerce')
@@ -4613,11 +4113,9 @@ with tab2:
             except Exception as e:
                 filas_con_errores_indices.add(idx)
         
-        # Retornar filas con errores
         if filas_con_errores_indices:
             df_errores = df_revisar.loc[list(filas_con_errores_indices)].copy()
             
-            # Agregar columnas de tipo de error ESPECÍFICAS
             for idx in df_errores.index:
                 df_errores.loc[idx, 'ERROR: NOMBRES NO COINCIDEN'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('NOMBRES_NO_COINCIDEN', False) else ''
                 df_errores.loc[idx, 'ERROR: GRADO NO COINCIDE'] = 'REVISAR' if errores_por_fila.get(idx, {}).get('GRADO_NO_COINCIDE', False) else ''
@@ -4634,9 +4132,6 @@ with tab2:
         
         return None
     
-    # ============================================================
-    # INTERFAZ DE USUARIO
-    # ============================================================
     col_izq, col_der = st.columns(2)
     
     # COLUMNA IZQUIERDA: Archivo Base
@@ -4654,7 +4149,6 @@ with tab2:
             archivo_base_bytes = archivo_base.read()
             archivo_base.seek(0)
             
-            # Detectar hojas
             xls_base = pd.ExcelFile(archivo_base)
             hojas_base = xls_base.sheet_names
             
@@ -4668,7 +4162,7 @@ with tab2:
                 df_base, error_base, fila_cab_base, _, df_err = leer_archivo_certificado(
                     archivo_base_bytes,
                     hoja_base_seleccionada,
-                    es_ok_evaluador=False  # Archivo OK permite campos vacíos
+                    es_ok_evaluador=False 
                 )
                 
                 if error_base:
@@ -4682,7 +4176,6 @@ with tab2:
                         'nombre_hoja': hoja_base_seleccionada,
                         'fila_cabecera': fila_cab_base
                     }
-                    # Limpiar resultados al cargar nuevo archivo
                     st.session_state.comparador_resultados = None
                     st.session_state.comparador_comparacion_realizada = False
                     st.success(f"✅ Archivo OK cargado ({len(df_base)} registros)")
@@ -4692,7 +4185,6 @@ with tab2:
                     st.dataframe(st.session_state.comparador_archivo_base['df'].head(10), hide_index=True)
         else:
             st.info("⬆️ Por favor, sube el archivo OK para continuar")
-            # Si no hay archivo, limpiar datos cargados y resultados
             if st.session_state.comparador_archivo_base is not None:
                 st.session_state.comparador_archivo_base = None
                 st.session_state.comparador_resultados = None
@@ -4709,7 +4201,6 @@ with tab2:
             key=f"uploader_revisar_cert_{st.session_state.comparador_reset_counter}"
         )
 
-        # Extraer nombre del colegio del nombre del archivo
         if archivo_revisar is not None:
             nombre_archivo_evaluador = archivo_revisar.name
             patron_esperado_evaluador = f"_4P-5S_OK_EVALUADOR.xlsx"
@@ -4721,10 +4212,8 @@ with tab2:
                 st.info(f"📝 Tu archivo: `{nombre_archivo_evaluador}`")
                 st.stop()
             
-            # Extraer nombre del colegio (quitar el sufijo)
             nombre_colegio_evaluador = nombre_archivo_evaluador.replace(patron_esperado_evaluador, "")
 
-            # Validar que el nombre del colegio no esté vacío
             if not nombre_colegio_evaluador or nombre_colegio_evaluador.strip() == "":
                 st.error("❌ No se pudo extraer el nombre del colegio del archivo")
                 st.info(f"Archivo recibido: `{nombre_archivo_evaluador}`")
@@ -4746,7 +4235,7 @@ with tab2:
                 df_revisar, error_revisar, fila_cab_revisar, _, df_err = leer_archivo_certificado(
                     archivo_revisar_bytes,
                     hoja_revisar_seleccionada,
-                    es_ok_evaluador=True  # Archivo OK_EVALUADOR requiere campos completos
+                    es_ok_evaluador=True 
                 )
                 
                 if error_revisar:
@@ -4755,7 +4244,6 @@ with tab2:
                     st.error(f"❌ Se encontraron {len(df_err)} filas con errores de validación")
                     st.dataframe(df_err, use_container_width=True, hide_index=True)
                     
-                    # Botón de descarga para filas con errores
                     st.divider()
                     csv = df_err.to_csv(index=False).encode('utf-8-sig')
                     st.download_button(
@@ -4772,7 +4260,6 @@ with tab2:
                         'fila_cabecera': fila_cab_revisar,
                         'bytes': archivo_revisar_bytes
                     }
-                    # Limpiar resultados al cargar nuevo archivo
                     st.session_state.comparador_resultados = None
                     st.session_state.comparador_comparacion_realizada = False
                     st.success(f"✅ Archivo OK_EVALUADOR cargado ({len(df_revisar)} registros)")
@@ -4783,13 +4270,11 @@ with tab2:
 
         else:
             st.info("⬆️ Por favor, sube el archivo OK_EVALUADOR para continuar")
-            # Si no hay archivo, limpiar datos cargados y resultados
             if st.session_state.comparador_archivo_revisar is not None:
                 st.session_state.comparador_archivo_revisar = None
                 st.session_state.comparador_resultados = None
                 st.session_state.comparador_comparacion_realizada = False
     
-    # SECCIÓN DE COMPARACIÓN
     st.divider()
     
     if st.session_state.comparador_archivo_base and st.session_state.comparador_archivo_revisar:
@@ -4803,16 +4288,13 @@ with tab2:
                         st.session_state.comparador_archivo_revisar['df'].copy()
                     )
                     st.session_state.comparador_resultados = df_errores
-                    # Marcar que se realizó la comparación
                     st.session_state.comparador_comparacion_realizada = True
         
         # MOSTRAR RESULTADOS
         if st.session_state.comparador_resultados is not None:
             st.divider()
             
-            # Verificar si es un DataFrame (hay errores) o None (no hay errores)
             if isinstance(st.session_state.comparador_resultados, pd.DataFrame) and len(st.session_state.comparador_resultados) > 0:
-                # Hay errores
                 df_errores = st.session_state.comparador_resultados
                 st.error("❌ **SE ENCONTRARON ERRORES**")
                 st.warning(f"⚠️ Total de filas con errores: **{len(df_errores)}**")
@@ -4820,14 +4302,12 @@ with tab2:
                 st.markdown("### 📋 Filas Completas con Errores")
                 st.caption("Estas son las filas que presentan uno o más errores. Revisa cada valor.")
                 
-                # Mostrar tabla con todas las columnas
                 st.dataframe(
                     df_errores,
                     use_container_width=True,
                     height=400
                 )
                 
-                # Botón de descarga
                 st.divider()
                 col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
                 with col_desc2:
@@ -4840,29 +4320,22 @@ with tab2:
                         use_container_width=True
                     )
         
-        # Mostrar resultado exitoso SIEMPRE después de comparar (aunque sea None)
         elif st.session_state.get('comparador_comparacion_realizada', False):
-            # No hay errores - VALIDACIÓN EXITOSA
             st.divider()
             st.success("🎉 **¡VALIDACIÓN EXITOSA!**")
             st.success("✅ Todos los datos y cálculos son correctos")
-            #st.balloons()
             
-            # GENERAR ARCHIVO OK_EVALUADOR CON ESTATUS
             df_final = st.session_state.comparador_archivo_revisar['df'].copy()
                 
-            # Asegurar que existe la columna ESTATUS
             if "ESTATUS" not in df_final.columns:
                 df_final["ESTATUS"] = ""
                 
-            # Calcular ESTATUS basado en NOTA FINAL
             if "NOTA FINAL" in df_final.columns:
                 nota_final = pd.to_numeric(df_final["NOTA FINAL"], errors="coerce")
                 df_final["ESTATUS"] = nota_final.apply(
                     lambda x: "Aprobado" if pd.notna(x) and x >= 12.5 else "Desaprobado"
                 )
                 
-                # Mostrar resumen de aprobados/desaprobados
                 total = len(df_final)
                 aprobados = (df_final["ESTATUS"] == "Aprobado").sum()
                 desaprobados = (df_final["ESTATUS"] == "Desaprobado").sum()
@@ -4877,28 +4350,21 @@ with tab2:
                 with col3:
                     st.metric("❌ Desaprobados", desaprobados, delta=f"{desaprobados/total*100:.1f}%")
                 
-            ##
-            # Obtener el archivo original en bytes
             archivo_bytes_original = st.session_state.comparador_archivo_revisar['bytes']
 
-            # Cargar el archivo original con openpyxl para mantener formato
             wb_original = load_workbook(BytesIO(archivo_bytes_original))
             nombre_hoja = st.session_state.comparador_archivo_revisar['nombre_hoja']
             ws_original = wb_original[nombre_hoja]
 
-            # Obtener la fila de cabecera
-            fila_cabecera = st.session_state.comparador_archivo_revisar.get('fila_cabecera', 7)  # Default 7 si no existe
+            fila_cabecera = st.session_state.comparador_archivo_revisar.get('fila_cabecera', 7) 
 
-            # Buscar la columna ESTATUS en la cabecera original
             col_estatus_idx = None
-            for col_idx, cell in enumerate(ws_original[fila_cabecera + 1], start=1):  # +1 porque fila_cabecera es 0-based
+            for col_idx, cell in enumerate(ws_original[fila_cabecera + 1], start=1):
                 if cell.value and str(cell.value).strip().upper() == "ESTATUS":
                     col_estatus_idx = col_idx
                     break
 
-            # Si no existe columna ESTATUS, buscar después de la última columna con datos
             if col_estatus_idx is None:
-                # Encontrar la última columna con datos en la fila de cabecera
                 max_col = ws_original.max_column
                 for col_idx in range(1, max_col + 1):
                     cell = ws_original.cell(row=fila_cabecera + 1, column=col_idx)
@@ -4906,25 +4372,18 @@ with tab2:
                         col_estatus_idx = col_idx
                         break
                 else:
-                    # Si todas las columnas tienen datos, agregar al final
                     col_estatus_idx = max_col + 1
                 
-                # Escribir "ESTATUS" en la cabecera
                 ws_original.cell(row=fila_cabecera + 1, column=col_estatus_idx, value="ESTATUS")
 
-            # Obtener los índices de las filas de datos (después de la cabecera)
-            start_row = fila_cabecera + 2  # +2 porque: fila_cabecera (0-based) + 1 para cabecera + 1 para primera fila de datos
-
-            # Obtener DataFrame con los datos para calcular ESTATUS
+            start_row = fila_cabecera + 2
             df_datos = st.session_state.comparador_archivo_revisar['df'].copy()
 
-            # Calcular ESTATUS para cada fila
             estatus_values = []
             for idx in range(len(df_datos)):
                 try:
                     if "NOTA FINAL" in df_datos.columns:
                         nota_final = df_datos.loc[idx, "NOTA FINAL"]
-                        # Convertir a numérico si es posible
                         try:
                             nota_num = float(str(nota_final).strip())
                             estatus = "Aprobado" if nota_num >= 12.5 else "Desaprobado"
@@ -4936,18 +4395,15 @@ with tab2:
                     estatus = ""
                 estatus_values.append(estatus)
 
-            # Escribir los valores de ESTATUS en el archivo Excel original
             for i, estatus in enumerate(estatus_values):
                 row_idx = start_row + i
-                if row_idx <= ws_original.max_row:  # Solo escribir si la fila existe
+                if row_idx <= ws_original.max_row:
                     ws_original.cell(row=row_idx, column=col_estatus_idx, value=estatus)
 
-            # Guardar el archivo modificado en memoria
             output = BytesIO()
             wb_original.save(output)
             excel_data = output.getvalue()
 
-            # Botón de descarga
             col_desc1, col_desc2, col_desc3 = st.columns([1, 1, 1])
             with col_desc2:
                 st.download_button(
@@ -4958,11 +4414,10 @@ with tab2:
                     use_container_width=True,
                     help="Descarga el archivo original con la columna ESTATUS completada según la nota final"
                 )
-            ##      
+
     else:
         st.info("👆 Carga ambos archivos para comenzar la comparación")
     
-    # Botón reset
     st.divider()
     if st.button("🔄 Limpiar y Nueva Comparación", key="btn_reset_comparador_cert"):
         st.session_state.comparador_archivo_base = None
@@ -4972,22 +4427,26 @@ with tab2:
         st.session_state.comparador_reset_counter += 1
         st.rerun()
 
-# ================================================
 # TAB 3: Generar Reporte PDF
-# ================================================
 with tab3:
-    st.markdown("## 📑 Generador de Resultados PDF")
+    st.markdown("## 📑 Generador de Planilla de Resultados")
+    st.markdown("""
+                **DESCRIPCIÓN:**
+                
+                Permite generar reportes de manera automática a partir de la información registrada, organizados por grado, sección y curso. El proceso crea archivos PDF independientes para cada nivel de corte, los cuales pueden descargarse de manera consolidada en un archivo ZIP, facilitando la revisión, distribución y trazabilidad de la información.
+                """)
     st.info("""
-    📌 **Instrucciones:**
-    - Sube un archivo **OK** con formato: 
-        - `{NombreColegio}_1P-3P_OK.xlsx`
-        - `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
-    - Se generarán PDFs agrupados por: **Grado → Sección → Curso**
-    - Cada PDF contendrá la lista completa de estudiantes con sus notas
-    - **IMPORTANTE:** Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
+    📌 **INSTRUCCIONES**
+    1.	Sube un archivo OK con formato:
+        •	{NombreColegio}_1P-3P_OK.xlsx
+        •	{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx
+    2.	Se generarán PDFs agrupados por: Grado → Sección → Curso
+    3.	Cada PDF contendrá la lista completa de estudiantes con sus notas
+
+    📌 **VALIDACIONES AUTOMÁTICAS**
+    1.	Las columnas PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO y NOTA FINAL deben estar completas (sin valores vacíos)
     """)
     
-    # Selector de tipo de archivo
     tipo_reporte = st.radio(
         "Selecciona el tipo de archivo homologado:",
         ["1P-3P", "4P-5S"],
@@ -4995,7 +4454,6 @@ with tab3:
         key="radio_tipo_reporte"
     )
     
-    # Uploader de archivo CON KEY DINÁMICA para permitir limpieza
     archivo_reporte = st.file_uploader(
         f"Selecciona el archivo homologado {tipo_reporte}",
         type=["xlsx"],
@@ -5003,10 +4461,8 @@ with tab3:
     )
     
     if archivo_reporte:
-        # Extraer nombre del colegio del nombre del archivo
         nombre_archivo = archivo_reporte.name
         
-        # Validar formato del nombre de archivo
         if tipo_reporte == "1P-3P":
             patron_esperado = f"_{tipo_reporte}_OK.xlsx"
         else: # "4P-5S"
@@ -5019,25 +4475,18 @@ with tab3:
             st.info(f"📝 Tu archivo: `{nombre_archivo}`")
             st.stop()
         
-        # Extraer nombre del colegio (quitar el sufijo)
         nombre_colegio_reporte = nombre_archivo.replace(patron_esperado, "")
         
-        # Validar que el nombre del colegio no esté vacío
         if not nombre_colegio_reporte or nombre_colegio_reporte.strip() == "":
             st.error("❌ No se pudo extraer el nombre del colegio del archivo")
             st.info(f"Archivo recibido: `{nombre_archivo}`")
             st.stop()
         
-        # Mostrar nombre del colegio detectado
         st.success(f"🏫 Colegio detectado: **{nombre_colegio_reporte}**")
         
-        # Cargar y procesar archivo
         with st.spinner("📊 Procesando y validando archivo..."):
             try:
-                # Leer archivo sin procesar
                 df_temp = pd.read_excel(archivo_reporte, header=None)
-                
-                # Detectar cabecera
                 fila_cabecera = detectar_cabecera_automatica(df_temp, COLUMNAS_TAB03)
                 
                 if fila_cabecera is None:
@@ -5045,14 +4494,11 @@ with tab3:
                     st.info("Columnas esperadas: NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN")
                     st.stop()
                 
-                # Leer con cabecera detectada
                 df_reporte = pd.read_excel(archivo_reporte, header=fila_cabecera)
                 
-                # Normalizar nombres de columnas manteniendo formato correcto
                 columnas_norm = {c.strip().lower(): c for c in df_reporte.columns}
                 cols_requeridas = ["nro.", "paterno", "materno", "nombre", "curso", "grado", "sección", "nota final"]
                 
-                # Mapear columnas
                 cols_a_usar = []
                 for col_req in cols_requeridas:
                     col_norm = col_req.strip().lower()
@@ -5063,16 +4509,11 @@ with tab3:
                         st.info(f"Columnas disponibles: {list(df_reporte.columns)}")
                         st.stop()
                 
-                # Seleccionar solo columnas necesarias
                 df_reporte = df_reporte[cols_a_usar]
-                
-                # Renombrar a formato estándar (MAYÚSCULAS)
                 df_reporte.columns = [
                     "NRO.", "PATERNO", "MATERNO", "NOMBRE", "CURSO", 
                     "GRADO", "SECCIÓN", "NOTA FINAL"
                 ]
-                
-                # Limpiar datos
                 df_reporte = limpiar_filas_vacias(df_reporte, columnas_clave=["PATERNO", "MATERNO", "NOMBRE"])
                 
                 if df_reporte.empty:
@@ -5081,7 +4522,6 @@ with tab3:
 
                 df_reporte = df_reporte.rename(columns={"NOMBRE": "NOMBRES"})
                 
-                # VALIDACIÓN ESTRICTA DE CAMPOS OBLIGATORIOS
                 st.markdown("### 🔍 Validando campos obligatorios...")
                 
                 columnas_obligatorias = ["PATERNO", "MATERNO", "NOMBRES", "GRADO", "SECCIÓN", "CURSO", "NOTA FINAL"]
@@ -5092,22 +4532,19 @@ with tab3:
                         errores_validacion.append(f"Columna '{col}' no encontrada")
                         continue
                     
-                    # Contar valores vacíos (NaN, None, "", espacios en blanco)
                     vacios = df_reporte[col].isna() | (df_reporte[col].astype(str).str.strip() == "")
                     num_vacios = vacios.sum()
                     
                     if num_vacios > 0:
-                        # Obtener índices de filas con valores vacíos
                         indices_vacios = df_reporte[vacios].index.tolist()
                         filas_vacias = [idx + fila_cabecera + 2 for idx in indices_vacios]
                         
                         errores_validacion.append({
                             'columna': col,
                             'num_vacios': num_vacios,
-                            'filas': filas_vacias[:10]  # Mostrar máximo 10 filas
+                            'filas': filas_vacias[:10]
                         })
                 
-                # Si hay errores, mostrarlos y detener
                 if errores_validacion:
                     st.error("❌ **VALIDACIÓN FALLIDA: Existen campos obligatorios vacíos**")
                     st.warning("⚠️ Todas las columnas obligatorias deben estar completas antes de generar los reportes PDF")
@@ -5126,7 +4563,6 @@ with tab3:
                                 else:
                                     st.info(f"📍 Filas afectadas: {filas_texto}")
                             
-                            # Mostrar DataFrame con las filas problemáticas
                             df_problematico = df_reporte[df_reporte[error['columna']].isna() | 
                                                          (df_reporte[error['columna']].astype(str).str.strip() == "")]
                             
@@ -5140,30 +4576,24 @@ with tab3:
                     st.info("💡 **Solución:** Corrige los valores vacíos en el archivo Excel y vuelve a subirlo")
                     st.stop()
                 
-                # Si llegamos aquí, todas las validaciones pasaron
                 st.success("✅ **Todas las validaciones pasaron correctamente**")
                 st.success(f"✅ Archivo cargado: {len(df_reporte)} registros")
                 st.success(f"📍 Cabecera detectada en fila {fila_cabecera + 1}")
                 
-                # Homologar datos
                 df_reporte = homologar_dataframe(df_reporte)
                 
-                # Guardar en session state
                 st.session_state.tab3_df_reporte = df_reporte
                 st.session_state.tab3_nombre_colegio = nombre_colegio_reporte
                 st.session_state.tab3_tipo_archivo = tipo_reporte
                 st.session_state.tab3_archivo_procesado = True
                 
-                # Mostrar preview
                 st.markdown("---")
                 st.markdown("### 📊 Vista previa de datos")
                 st.dataframe(df_reporte, hide_index=True)
                 
-                # Agrupar datos
                 st.markdown("---")
                 st.markdown("### 📊 Agrupación de Datos")
                 
-                # Crear agrupaciones
                 grupos_reportes = df_reporte.groupby(['GRADO', 'SECCIÓN', 'CURSO'])
                 num_grupos = len(grupos_reportes)
                 
@@ -5175,7 +4605,6 @@ with tab3:
                 with col_info3:
                     st.metric("Reportes a generar", num_grupos)
                 
-                # Mostrar detalle de grupos
                 with st.expander("📋 Ver detalle de grupos", expanded=True):
                     grupos_info = []
                     for (grado, seccion, curso), grupo_df in grupos_reportes:
@@ -5187,11 +4616,8 @@ with tab3:
                         })
                     st.dataframe(pd.DataFrame(grupos_info), hide_index=True)
                 
-                # Botones de acción
                 st.markdown("---")
-                #col_btn1, col_btn2 = st.columns([3, 1])
                 
-                #with col_btn1:
                 if st.button("🎯 GENERAR REPORTES PDF", type="primary", use_container_width=True):
                     generar_reportes_pdf(
                         df_reporte, 
@@ -5206,10 +4632,8 @@ with tab3:
                     st.code(traceback.format_exc())
     
     else:
-        # Mostrar mensaje cuando no hay archivo
         st.info("👆 Sube un archivo para comenzar")
     
-    # Botón de limpieza (disponible siempre en la parte inferior)
     st.markdown("---")
     if st.button("🔄 Limpiar y empezar de nuevo", use_container_width=True, key="btn_reset_tab3"):
         st.session_state.tab3_archivo_procesado = False
@@ -5219,34 +4643,34 @@ with tab3:
         st.session_state.tab3_reset_counter += 1 
         st.rerun()
 
-# ================================================
 # TAB 4: Generador de Certificados
-# ================================================
 with tab4:
-    st.markdown("## 🎓 Generador de Certificados PDF")
+    st.markdown("## 🎓 Generador de Diplomas, Certificados y Constancias")
+    st.markdown("""
+                **DESCRIPCIÓN:**
+                
+                Permite emitir los diplomas, certificados, certificados progresivos y constancias manera automática a partir de la información registrada de diplomados, certificados y constancias, según el archivo cargado. El proceso crea archivos PDF independientes para cada alumno, los cuales pueden descargarse de manera consolidada en un archivo ZIP, facilitando la revisión, distribución y trazabilidad de la información.
+                """)
     st.info("""
     📌 **INSTRUCCIONES:**
-    - Sube un archivo **OK** con formato: 
-        - `{NombreColegio}_1P-3P_OK.xlsx`
-        - `{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx`
-    - Selecciona el tipo de certificado que deseas generar
-    - Elige si deseas incluir marca de agua en los certificados
-    - Se generarán archivos comprimidos con todos los certificados correspondientes
+    1.	Sube un archivo OK con formato:
+        •	{NombreColegio}_1P-3P_OK.xlsx
+        •	{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx
+    2.	Selecciona el tipo de certificado que a generar
+    3.	Elige si deseas incluir marca de agua en los certificados
+    4.	Se generarán archivos comprimidos con todos los certificados correspondientes
             
-    ⚠️ **IMPORTANTE:** 
-    - **Columnas base requeridas:** NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
-    - **Columna HORAS PROGRESIVO:** Solo es REQUERIDA cuando se selecciona el tipo "Progresivo". Para certificados normales, esta columna es opcional.
-    - La columna "NOTA FINAL" debe estar completa (sin valores vacíos).
+    ⚠️ **IMPORTANTE**
+    1.	**Columnas base requeridas:** NRO., PATERNO, MATERNO, NOMBRE, GRADO, SECCIÓN, CURSO, NOTA LABORATORIO, ¿ASISTIÓ?, P1 4PTOS., P2 4PTOS., P3 4PTOS., P4 4PTOS., P5 4PTOS., NOTA EVALUADOR, NOTA FINAL, OBSERVADOS, ESTATUS, NUMERACIÓN
+    2.	**Columna HORAS PROGRESIVO:** Solo es REQUERIDA cuando se selecciona el tipo "Progresivo". Para certificados normales, esta columna es opcional.
+    3.	La columna "NOTA FINAL" debe estar completa (sin valores vacíos)
     """)
 
-    # Variable de estado para controlar el procesamineto del archivo
     if 'archivo_procesado' not in st.session_state:
         st.session_state.archivo_procesado = False
 
-    # Preprocesamiento del Excel
     st.markdown("### 📤 Subir y procesar archivo Excel")
 
-    # Estados para las opciones de certificados
     if 'tipo_certificado_seleccionado' not in st.session_state:
         st.session_state.tipo_certificado_seleccionado = None
     if 'usar_marca_agua_seleccionado' not in st.session_state:
@@ -5258,26 +4682,21 @@ with tab4:
         key=f"tab4_uploader_{st.session_state.tab4_reset_counter}"
     )
 
-    # Selectores de opciones (solo se muestran si hay un archivo cargado)
     if uploaded_file:
         st.markdown("### ⚙️ Configuración de certificados")
         
-        # Determinar si deshabilitar las opciones (cuando ya se generaron los certificados)
         deshabilitar_opciones = st.session_state.certificados_generados
 
         col1, col2 = st.columns(2)
         
         with col1:
-            # Mapeo de nombres visuales a valores internos
             opciones_display = {
                 "Regulares (diplomados, certificados y constancias)": "Regular",
                 "Progresivo": "Progresivo"
             }
             
-            # Obtener el valor visual actual basado en el valor interno guardado
             valor_actual = st.session_state.tipo_certificado_seleccionado
             if valor_actual:
-                # Invertir el diccionario para encontrar la clave por valor
                 display_actual = [k for k, v in opciones_display.items() if v == valor_actual][0]
             else:
                 display_actual = list(opciones_display.keys())[0]
@@ -5290,9 +4709,7 @@ with tab4:
                 key="select_tipo_certificado",
                 disabled=deshabilitar_opciones
             )
-            # Guardar el valor interno, no el visual
             st.session_state.tipo_certificado_seleccionado = opciones_display[tipo_certificado_display]
-
         
         with col2:
             st.markdown("""
@@ -5312,7 +4729,6 @@ with tab4:
             )
             st.session_state.usar_marca_agua_seleccionado = usar_marca_agua
         
-        # Selector de fecha para los certificados
         st.markdown("### 📅 Fecha de los certificados")
         col_fecha1, col_fecha2 = st.columns([2, 1])
         
@@ -5333,7 +4749,6 @@ with tab4:
                 st.session_state.fecha_certificado_seleccionada = datetime.now().date()
                 st.rerun()
         
-        # Mostrar la fecha formateada que se usará
         from datetime import date
         fecha_para_certificado = st.session_state.fecha_certificado_seleccionada
         if isinstance(fecha_para_certificado, date):
@@ -5343,7 +4758,6 @@ with tab4:
         fecha_formateada = mes_en_espanol(fecha_dt)
         st.info(f"📄 Los certificados mostrarán: **Lima, {fecha_formateada}**")
         
-        # Mostrar información según el tipo seleccionado
         tipo_certificado_actual = st.session_state.tipo_certificado_seleccionado
         if tipo_certificado_actual == "Regular":
             st.info("""
@@ -5357,18 +4771,14 @@ with tab4:
         if usar_marca_agua:
             st.warning("⚠️ Los certificados incluirán la marca de agua 'PRELIMINAR'")
         
-        
         st.markdown("---")
 
     if uploaded_file and not st.session_state.archivo_procesado:
         if st.button("🚀 Procesar archivo y generar certificados", type="primary", use_container_width=True, key="btn_procesar_certificados"):
                 with st.spinner("Validando y procesando archivo..."):
                     try:
-                        # Primera lectura: detectar dónde está el encabezado
                         uploaded_file.seek(0)
                         df_temp = pd.read_excel(uploaded_file, header=None)
-
-                        # Detectar la fila del encabezado usando la función existente
                         fila_encabezado = detectar_fila_encabezado(df_temp)
                         
                         if fila_encabezado is None:
@@ -5377,7 +4787,6 @@ with tab4:
                         else:
                             st.info(f"📍 Encabezado detectado en la fila {fila_encabezado + 1}")
                         
-                        # Reiniciar el archivo y leer con el encabezado correcto
                         uploaded_file.seek(0)
                         df_usuario = pd.read_excel(uploaded_file, header=fila_encabezado)
 
@@ -5385,16 +4794,12 @@ with tab4:
                         st.error(f"❌ Error al leer el archivo: {str(e)}")
                         st.stop()
                     
-                    # Obtener el tipo de certificado seleccionado
                     tipo_certificado_para_validar = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
-
-                    # Validar y mapear columnas
                     df_formateado, exito_mapeo, mensaje_mapeo = validar_y_mapear_columnas(df_usuario, tipo_certificado_para_validar)
                     
                     if not exito_mapeo:
                         st.error(mensaje_mapeo)
                         
-                        # Mensaje de ayuda ajustado según el tipo
                         if tipo_certificado_para_validar == "Progresivo":
                             st.info(""" 
                                     El archivo de Excel debe contener exactamente estas columnas:
@@ -5413,25 +4818,20 @@ with tab4:
                     
                     st.success(mensaje_mapeo)
                     
-                    # Convertir el DataFrame mapeado a un objeto BytesIO para pasarlo a procesar_excel_inicial
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
                         df_formateado.to_excel(writer, index=False, sheet_name='Sheet1')
                     output.seek(0)
                     
-                    # Procesar el archivo ya mapeado
                     df_procesado, exito, mensaje = procesar_excel_inicial(output)
                     
                     if exito:
                         st.session_state.df_procesado = df_procesado
                         st.session_state.nombre_archivo = uploaded_file.name
-                        
-                        # Resetear estados cuando se procesa un nuevo archivo
                         st.session_state.grupos = None
                         st.session_state.plantillas = None
                         st.session_state.certificados_generados = False
                         st.session_state.zip_buffer = None
-                        
                         st.success(mensaje)
                         st.subheader("✅ Archivo procesado - Vista previa de datos limpios")
                         st.write(f"**Dimensiones procesadas:** {df_procesado.shape[0]} filas x {df_procesado.shape[1]} columnas")
@@ -5440,18 +4840,14 @@ with tab4:
                         df_mostrar.columns = df_mostrar.columns.str.upper()
                         
                         st.dataframe(df_mostrar, hide_index=True)
-                        
-                        # Cargar plantillas automáticamente
                         st.session_state.plantillas = cargar_plantillas()
                         
-                        # Clasificar estudiantes automáticamente usando el tipo seleccionado
                         tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
                         st.session_state.grupos = clasificar_estudiantes_por_nota(
                             st.session_state.df_procesado, 
                             tipo_certificado_actual
                         )
                         
-                        # Mostrar preview de certificados que se generarán
                         if st.session_state.grupos:
                             st.markdown("### 📋 Preview de certificados a generar")
                             
@@ -5482,41 +4878,32 @@ with tab4:
                             
                             st.markdown("---")
 
-                        # Generar certificados automáticamente
                         generar_todos_certificados()
 
-                        # Variable de procesamiento activada
                         st.session_state.archivo_procesado = True
-                        #st.rerun()
                     else:
                         st.error(mensaje)
 
     elif uploaded_file and st.session_state.archivo_procesado:
         st.success("✅ Archivo ya procesado. Los certificados están listos para descargar.")
 
-    # Mostrar botón de descarga si los certificados fueron generados
     if st.session_state.certificados_generados and st.session_state.zip_buffer:
         nombre_archivo = st.session_state.get('nombre_archivo', '')
         nombre_base = os.path.splitext(nombre_archivo)[0] if nombre_archivo else "CERTIFICADOS"
 
-        # Extraer solo nombre del colegio y rango de grados (1P-3P o 4P-5S)
         import re
-        # Buscar patrón: {NombreColegio}_{1P-3P o 4P-5S}_...
         match = re.match(r'(.+?)_(1P-3P|4P-5S)', nombre_base)
         if match:
             nombre_colegio = match.group(1)
             rango_grados = match.group(2)
             nombre_limpio = f"{nombre_colegio}_{rango_grados}"
         else:
-            # Si no se encuentra el patrón, usar el nombre completo
             nombre_limpio = nombre_base
         
-        # Obtener el tipo de certificado seleccionado
         tipo_certificado = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
         prefijo_tipo = "Regulares" if tipo_certificado == "Regular" else "Progresivos"
-
-        # Agregar sufijo si tiene marca de agua
         usar_marca_agua = st.session_state.get('usar_marca_agua_seleccionado', False)
+
         if usar_marca_agua:
             zip_filename = f"{prefijo_tipo}_{nombre_limpio}_Preliminar.zip"
         else:
@@ -5529,7 +4916,6 @@ with tab4:
             mime="application/zip"
         )
         
-        # Botón para generar nuevos certificados con diferentes opciones
         st.markdown("---")
         if st.button("🔄 Limpiar y Generar nuevos certificados", use_container_width=True, key="btn_regenerar_certificados"):
             st.session_state.archivo_procesado = False
@@ -5547,36 +4933,37 @@ with tab4:
         
     elif not uploaded_file:
         st.info("👆 Sube un archivo Excel para generar los certificados automáticamente.")
-        # Resetear el estado
         st.session_state.archivo_procesado = False
 
-# ================================================
 # TAB 5: GENERADOR DE INSIGNIAS
-# ================================================
 with tab5:
-    st.markdown("## 📛 Generador de Insignias para docentes o alumnos")
+    st.markdown("## 🏅 Generador de Insignias (Docente y Alumno)")
+    st.markdown("""
+                **DESCRIPCIÓN:**
+                
+                Permite validar que el archivo devuelto por el evaluador corresponda exactamente al archivo originalmente enviado, verificando que no se hayan realizado modificaciones al contenido y que la única información agregada sean las notas u observaciones del proceso de evaluación.
+                """)
     st.info("""
-            📌 **Columnas base requeridas (Columnas con valores completos):**
-
-                ALUMNO: NOMBRE,PATERNO,MATERNO,CURSO,AÑO.
-
-                DOCENTE: NOMBRE,PATERNO,MATERNO,TIPO DE INSIGNEA,AÑO.
+    📌 **INSTRUCCIONES**
+    1.	 Columnas base requeridas (Columnas con valores completos):
             
-            ⚠️ IMPORTANTE:
-            - Todos los datos se convertirán automáticamente a **MAYÚSCULAS**.
-            - La cabecera debe estar en la **fila 9** del Excel.
-            - Las columnas deben estar correctamente nombradas y pueden variar de orden.
-            - El nombre del PDF será: `{TIPO DE INSIGNEA}_{NOMBRE COMPLETO}.pdf`.
-            """)
+    •	ALUMNO: NOMBRE, PATERNO, MATERNO, CURSO, AÑO.
+            
+    •	DOCENTE: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA, AÑO.
+            
+    ⚠️ **IMPORTANTE**
+    1.	Todos los datos se convertirán automáticamente a MAYÚSCULAS.
+    2.	La cabecera debe estar en la fila 9 del Excel.
+    3.	Las columnas deben estar correctamente nombradas y pueden variar de orden.
+    4.	El nombre del PDF será: {TIPO DE INSIGNEA}_{NOMBRE COMPLETO}.pdf.
+    """)
     
-    # Selector de tipo de insignia
     tipo_insignia = st.radio(
             "Selecciona el tipo de insignia a generar:",
             ["ALUMNO", "DOCENTE"],
             horizontal=True
         )
 
-    # Carga del archivo
     uploaded_file = st.file_uploader(
             f"Sube tu archivo Excel (.xlsx) con los datos de {tipo_insignia.lower()}s",
             type=["xlsx"],
@@ -5586,21 +4973,14 @@ with tab5:
     
     if uploaded_file:
         try:
-            # Leer el Excel con la cabecera en la fila 9
             df = pd.read_excel(uploaded_file, header=8)
-            
-            # Eliminar filas completamente vacías
             df = df.dropna(how='all')
-
-            # Reemplazar NaN por cadenas vacías
             df = df.fillna('')
             
-            # Convertir todo a mayúsculas
             for col in df.columns:
                 if df[col].dtype == 'object':
                     df[col] = df[col].astype(str).str.upper()
 
-            # Columnas de validación
             columnas_base = ['NOMBRE', 'PATERNO', 'MATERNO', 'AÑO']
 
             if tipo_insignia == "ALUMNO":
@@ -5610,7 +4990,6 @@ with tab5:
                 columnas_requeridas = columnas_base + ['TIPO DE INSIGNEA']
                 mensaje_error = "❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA y AÑO"
             
-            # Verificar que todas las columnas requeridas existan
             columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
 
             if columnas_faltantes:
@@ -5619,31 +4998,25 @@ with tab5:
                 st.info(f"📋 Columnas encontradas en el archivo: {', '.join(df.columns.tolist())}")
                 st.stop()
 
-            # Crear columna IDENTIFICADOR = NOMBRE + PATERNO + MATERNO
             df['IDENTIFICADOR'] = (
                 df['NOMBRE'].astype(str).str.strip() + ' ' + 
                 df['PATERNO'].astype(str).str.strip() + ' ' + 
                 df['MATERNO'].astype(str).str.strip()
             )
-            # Limpiar espacios múltiples y reemplazar "NAN" por vacío
             df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace(r'\s+', ' ', regex=True).str.strip()
             df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace('NAN', '', regex=True).str.strip()
 
-            # Vista de errores
-            # Función para verificar si un valor está vacío o es inválido
             def es_vacio(valor):
                 if pd.isna(valor):
                     return True
                 valor_str = str(valor).strip().upper()
                 return valor_str == '' or valor_str == 'NAN' or valor_str == 'NONE'
             
-            # Validar cada fila
             filas_invalidas = []
             
             for idx, row in df.iterrows():
                 campos_vacios = []
                 
-                # Validar campos base
                 if es_vacio(row.get('NOMBRE', '')):
                     campos_vacios.append('NOMBRE')
                 if es_vacio(row.get('PATERNO', '')):
@@ -5653,7 +5026,6 @@ with tab5:
                 if es_vacio(row.get('AÑO', '')):
                     campos_vacios.append('AÑO')
                 
-                # Validar campos específicos según tipo
                 if tipo_insignia == "ALUMNO":
                     if es_vacio(row.get('CURSO', '')):
                         campos_vacios.append('CURSO')
@@ -5661,7 +5033,6 @@ with tab5:
                     if es_vacio(row.get('TIPO DE INSIGNEA', '')):
                         campos_vacios.append('TIPO DE INSIGNEA')
                 
-                # Si hay campos vacíos, registrar la fila como inválida
                 if campos_vacios:
                     filas_invalidas.append({
                         'fila': idx + 1,
@@ -5669,57 +5040,43 @@ with tab5:
                         'campos_vacios': ', '.join(campos_vacios)
                     })
             
-            # Mostrar resultados de validación
             total_filas = len(df)
 
             if filas_invalidas:
                 st.error(f"❌ VALIDACIÓN FALLIDA: Se encontraron {len(filas_invalidas)} registro(s) con datos incompletos de {total_filas} totales")
                 
-                # Mostrar detalles de filas inválidas
                 with st.expander(f"🔍 Ver detalles de {len(filas_invalidas)} registro(s) incompleto(s)", expanded=True):
                     st.markdown("**Los siguientes registros tienen campos vacíos:**")
                     
-                    # Crear DataFrame para mostrar las filas inválidas
                     df_invalidas = pd.DataFrame(filas_invalidas)
                     df_invalidas.columns = ['Fila Excel', 'Identificador', 'Campos Vacíos']
                     st.dataframe(df_invalidas, hide_index=True, use_container_width=True)
                 
                 st.error("🛑 **PROCESO DETENIDO**: Todos los registros deben tener datos completos para continuar.")
                 st.info("📝 **Instrucciones**: Corrije los registros incompletos en tu archivo Excel y vuelve a subirlo.")
-                
-                # DETENER COMPLETAMENTE EL PROCESO
                 st.stop()
             else:
                 st.success(f"✅ Archivo validado correctamente: {len(df)} registros completos encontrados")
             
-            # Mostrar vista previa (sin mostrar IDENTIFICADOR)
             with st.expander("👁️ Vista previa de los datos"):
-                # Crear una copia sin la columna IDENTIFICADOR para mostrar
                 df_preview = df.drop(columns=['IDENTIFICADOR'])
                 st.dataframe(df_preview, hide_index=True)
             
-            # Botón para generar insignias
             if st.button("🎨 Generar Insignias PDF", key="generar_insignias", type="primary", use_container_width=True):
                 with st.spinner("Generando insignias..."):
-                    # Crear carpeta temporal
                     temp_dir = "temp_insignias"
                     os.makedirs(temp_dir, exist_ok=True)
-                    
                     pdf_files = []
                     errores = []
-                    
-                    # Progress bar
                     progress_bar = st.progress(0)
                     status_text = st.empty()
-                    
-                    # Procesar cada fila
                     total_rows = len(df)
+
                     for idx, row in df.iterrows():
                         try:
                             status_text.text(f"Procesando insignia {idx + 1} de {total_rows}...")
                             progress_bar.progress((idx + 1) / total_rows)
                             
-                            # Determinar qué imagen usar
                             if tipo_insignia == "ALUMNO":
                                 imagen_fondo = "plantillas_insignias/ALUMNO.jpg"
                             else:  # DOCENTE
@@ -5729,28 +5086,20 @@ with tab5:
                                 else:
                                     imagen_fondo = "plantillas_insignias/DOCENTE_SENIOR.jpg"
                             
-                            # Verificar que existe la imagen
                             if not os.path.exists(imagen_fondo):
                                 errores.append(f"Fila {idx+2}: No se encontró la imagen {imagen_fondo}")
                                 continue
                             
-                            # Abrir imagen de fondo
                             img = Image.open(imagen_fondo)
                             draw = ImageDraw.Draw(img)
-
-                            # Ruta de fuente
                             font_path = "fonts/trebuchet.ttf"
-                            
-                            # Preparar variables según el tipo
                             identificador = str(row.get("IDENTIFICADOR", "")).upper()
                             ano = str(row.get("AÑO", "")).upper()
                             tipo_doc = str(row.get("TIPO DE INSIGNEA", "ALUMNO")).upper()
                             
                             if tipo_insignia == "ALUMNO":
-                                # Variables para alumnos: IDENTIFICADOR, CURSO, AÑO
                                 curso = str(row.get("CURSO", "")).upper()
-                                    
-                                # Dibujar IDENTIFICADOR con ajuste automático
+
                                 config_id = CONFIG_INSIGNIAS['IDENTIFICADOR']
                                 draw_centered_text_adaptive(
                                         draw=draw,
@@ -5765,7 +5114,6 @@ with tab5:
                                         fill="white"
                                     )
                                     
-                                # Dibujar CURSO con ajuste automático
                                 config_curso = CONFIG_INSIGNIAS['CURSO']
                                 draw_centered_text_adaptive(
                                         draw=draw,
@@ -5780,7 +5128,6 @@ with tab5:
                                         fill="white"
                                     )
                                     
-                                # Dibujar AÑO con ajuste automático
                                 config_ano = CONFIG_INSIGNIAS['AÑO']
                                 draw_centered_text_adaptive(
                                         draw=draw,
@@ -5798,9 +5145,6 @@ with tab5:
                                 pdf_name = f"ALUMNO_{identificador}.pdf"
                                     
                             else:  # DOCENTE
-                                # Variables para docentes: IDENTIFICADOR, AÑO
-                                    
-                                # Dibujar IDENTIFICADOR con ajuste automático
                                 config_id = CONFIG_INSIGNIAS['IDENTIFICADOR']
                                 draw_centered_text_adaptive(
                                         draw=draw,
@@ -5815,7 +5159,6 @@ with tab5:
                                         fill="white"
                                     )
                                     
-                                # Dibujar AÑO con ajuste automático
                                 config_ano = CONFIG_INSIGNIAS['AÑO']
                                 draw_centered_text_adaptive(
                                         draw=draw,
@@ -5830,32 +5173,23 @@ with tab5:
                                         fill="white"
                                     )
                                     
-                                # Nombre del archivo: {TIPO DE INSIGNEA}_IDENTIFICADOR.pdf
-                                # tipo_doc puede ser SENIOR, ESPECIALISTA, etc.
                                 pdf_name = f"{tipo_doc}_{identificador}.pdf"
                             
-                            # Limpiar nombre de archivo
                             pdf_name = pdf_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
                             pdf_path = os.path.join(temp_dir, pdf_name)
-                            
-                            # Convertir imagen a PDF
                             img_rgb = img.convert('RGB')
                             img_rgb.save(pdf_path, "PDF", resolution=100.0)
-                            
                             pdf_files.append(pdf_path)
                             
                         except Exception as e:
                             errores.append(f"Fila {idx+2}: {str(e)}")
                     
-                    # Limpiar progress bar
                     progress_bar.empty()
                     status_text.empty()
                     
-                    # Mostrar resultados
                     if pdf_files:
                         st.success(f"✅ Se generaron {len(pdf_files)} insignias correctamente")
                         
-                        # Crear ZIP
                         zip_filename = f"insignias_{tipo_insignia.lower()}.zip"
                         zip_path = os.path.join(temp_dir, zip_filename)
                         
@@ -5863,7 +5197,6 @@ with tab5:
                             for pdf_file in pdf_files:
                                 zipf.write(pdf_file, os.path.basename(pdf_file))
                         
-                        # Descargar ZIP
                         with open(zip_path, 'rb') as f:
                             st.download_button(
                                 label="📦 Descargar ZIP con todas las insignias",
@@ -5873,14 +5206,12 @@ with tab5:
                                 use_container_width=True
                             )
                     
-                    # Mostrar errores si los hay
                     if errores:
                         st.warning(f"⚠️ Se encontraron {len(errores)} errores:")
                         with st.expander("Ver errores"):
                             for error in errores:
                                 st.text(error)
                     
-                    # Limpiar archivos temporales
                     try:
                         import shutil
                         if os.path.exists(temp_dir):
@@ -5888,7 +5219,6 @@ with tab5:
                     except:
                         pass
 
-            # Botón para generar nuevas insigneas con diferentes opciones
             st.markdown("---")
             if st.button("🔄 Limpiar y Generar nuevas Insignias", use_container_width=True, key="btn_regenerar_insigneas"):
                 st.session_state.df_procesado = None
