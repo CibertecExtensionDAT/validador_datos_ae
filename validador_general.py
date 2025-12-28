@@ -5556,13 +5556,17 @@ with tab4:
 with tab5:
     st.markdown("## 📛 Generador de Insignias para docentes o alumnos")
     st.info("""
-            📌 **Columnas base requeridas:**
-            - NOMBRE,PATERNO,MATERNO,CURSO,AÑO,TIPO DE INSIGNEA
+            📌 **Columnas base requeridas (Columnas con valores completos):**
+
+                ALUMNO: NOMBRE,PATERNO,MATERNO,CURSO,AÑO.
+
+                DOCENTE: NOMBRE,PATERNO,MATERNO,TIPO DE INSIGNEA,AÑO.
             
             ⚠️ IMPORTANTE:
-            - Todos los datos se convertirán automáticamente a **MAYÚSCULAS**
-            - La cabecera debe estar en la **fila 9** del Excel
-            - El nombre del PDF será: `{TIPO DE INSIGNEA}_{NOMBRE COMPLETO}.pdf`
+            - Todos los datos se convertirán automáticamente a **MAYÚSCULAS**.
+            - La cabecera debe estar en la **fila 9** del Excel.
+            - Las columnas deben estar correctamente nombradas y pueden variar de orden.
+            - El nombre del PDF será: `{TIPO DE INSIGNEA}_{NOMBRE COMPLETO}.pdf`.
             """)
     
     # Selector de tipo de insignia
@@ -5595,25 +5599,98 @@ with tab5:
             for col in df.columns:
                 if df[col].dtype == 'object':
                     df[col] = df[col].astype(str).str.upper()
+
+            # Columnas de validación
+            columnas_base = ['NOMBRE', 'PATERNO', 'MATERNO', 'AÑO']
+
+            if tipo_insignia == "ALUMNO":
+                columnas_requeridas = columnas_base + ['CURSO']
+                mensaje_error = "❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, CURSO y AÑO"
+            else:  # DOCENTE
+                columnas_requeridas = columnas_base + ['TIPO DE INSIGNEA']
+                mensaje_error = "❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA y AÑO"
             
-            # Crear columna IDENTIFICADOR = NOMBRE + PATERNO + MATERNO
-            if 'NOMBRE' in df.columns and 'PATERNO' in df.columns and 'MATERNO' in df.columns:
-                df['IDENTIFICADOR'] = (
-                    df['NOMBRE'].astype(str).str.strip() + ' ' + 
-                    df['PATERNO'].astype(str).str.strip() + ' ' + 
-                    df['MATERNO'].astype(str).str.strip()
-                )
-                # Limpiar espacios múltiples y reemplazar "NAN" por vacío
-                df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace(r'\s+', ' ', regex=True).str.strip()
-                df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace('NAN', '', regex=True).str.strip()
-            else:
-                if tipo_insignia == "ALUMNO":
-                    st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, CURSO y AÑO")
-                else: # DOCENTE
-                    st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA y AÑO")
+            # Verificar que todas las columnas requeridas existan
+            columnas_faltantes = [col for col in columnas_requeridas if col not in df.columns]
+
+            if columnas_faltantes:
+                st.error(f"{mensaje_error}")
+                st.error(f"📋 Columnas faltantes: {', '.join(columnas_faltantes)}")
+                st.info(f"📋 Columnas encontradas en el archivo: {', '.join(df.columns.tolist())}")
                 st.stop()
+
+            # Crear columna IDENTIFICADOR = NOMBRE + PATERNO + MATERNO
+            df['IDENTIFICADOR'] = (
+                df['NOMBRE'].astype(str).str.strip() + ' ' + 
+                df['PATERNO'].astype(str).str.strip() + ' ' + 
+                df['MATERNO'].astype(str).str.strip()
+            )
+            # Limpiar espacios múltiples y reemplazar "NAN" por vacío
+            df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace(r'\s+', ' ', regex=True).str.strip()
+            df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace('NAN', '', regex=True).str.strip()
+
+            # Vista de errores
+            # Función para verificar si un valor está vacío o es inválido
+            def es_vacio(valor):
+                if pd.isna(valor):
+                    return True
+                valor_str = str(valor).strip().upper()
+                return valor_str == '' or valor_str == 'NAN' or valor_str == 'NONE'
             
-            st.success(f"✅ Archivo cargado correctamente: {len(df)} registros encontrados")
+            # Validar cada fila
+            filas_invalidas = []
+            
+            for idx, row in df.iterrows():
+                campos_vacios = []
+                
+                # Validar campos base
+                if es_vacio(row.get('NOMBRE', '')):
+                    campos_vacios.append('NOMBRE')
+                if es_vacio(row.get('PATERNO', '')):
+                    campos_vacios.append('PATERNO')
+                if es_vacio(row.get('MATERNO', '')):
+                    campos_vacios.append('MATERNO')
+                if es_vacio(row.get('AÑO', '')):
+                    campos_vacios.append('AÑO')
+                
+                # Validar campos específicos según tipo
+                if tipo_insignia == "ALUMNO":
+                    if es_vacio(row.get('CURSO', '')):
+                        campos_vacios.append('CURSO')
+                else:  # DOCENTE
+                    if es_vacio(row.get('TIPO DE INSIGNEA', '')):
+                        campos_vacios.append('TIPO DE INSIGNEA')
+                
+                # Si hay campos vacíos, registrar la fila como inválida
+                if campos_vacios:
+                    filas_invalidas.append({
+                        'fila': idx + 1,
+                        'identificador': row.get('IDENTIFICADOR', 'N/A'),
+                        'campos_vacios': ', '.join(campos_vacios)
+                    })
+            
+            # Mostrar resultados de validación
+            total_filas = len(df)
+
+            if filas_invalidas:
+                st.error(f"❌ VALIDACIÓN FALLIDA: Se encontraron {len(filas_invalidas)} registro(s) con datos incompletos de {total_filas} totales")
+                
+                # Mostrar detalles de filas inválidas
+                with st.expander(f"🔍 Ver detalles de {len(filas_invalidas)} registro(s) incompleto(s)", expanded=True):
+                    st.markdown("**Los siguientes registros tienen campos vacíos:**")
+                    
+                    # Crear DataFrame para mostrar las filas inválidas
+                    df_invalidas = pd.DataFrame(filas_invalidas)
+                    df_invalidas.columns = ['Fila Excel', 'Identificador', 'Campos Vacíos']
+                    st.dataframe(df_invalidas, hide_index=True, use_container_width=True)
+                
+                st.error("🛑 **PROCESO DETENIDO**: Todos los registros deben tener datos completos para continuar.")
+                st.info("📝 **Instrucciones**: Corrije los registros incompletos en tu archivo Excel y vuelve a subirlo.")
+                
+                # DETENER COMPLETAMENTE EL PROCESO
+                st.stop()
+            else:
+                st.success(f"✅ Archivo validado correctamente: {len(df)} registros completos encontrados")
             
             # Mostrar vista previa (sin mostrar IDENTIFICADOR)
             with st.expander("👁️ Vista previa de los datos"):
@@ -5810,7 +5887,7 @@ with tab5:
                             shutil.rmtree(temp_dir)
                     except:
                         pass
-                    
+
             # Botón para generar nuevas insigneas con diferentes opciones
             st.markdown("---")
             if st.button("🔄 Limpiar y Generar nuevas Insignias", use_container_width=True, key="btn_regenerar_insigneas"):
