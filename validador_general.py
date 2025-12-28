@@ -271,6 +271,28 @@ LISTA_COLEGIOS = [
     "Colegio Santa Rosa de Lima"
 ]
 
+# Configuración de espacios para texto en tab05
+CONFIG_INSIGNIAS = {
+            'IDENTIFICADOR': {
+                'font_size_inicial': 60,
+                'max_width': 765,
+                'max_height': 90,
+                'min_font_size': 30
+            },
+            'CURSO': {
+                'font_size_inicial': 60,
+                'max_width': 765,
+                'max_height': 200,
+                'min_font_size': 25
+            },
+            'AÑO': {
+                'font_size_inicial': 65,
+                'max_width': 400,
+                'max_height': 80,
+                'min_font_size': 40
+            }
+        }
+
 # ================================================
 # FUNCIONES AUXILIARES
 # ================================================
@@ -2579,19 +2601,137 @@ def generar_todos_certificados():
     return False
 
 # Función de centrado para Tab05
+def ajustar_texto_inteligente(draw, text, font_path, font_size_inicial, max_width, max_height, 
+                               min_font_size=20, line_spacing=1.2):
+    """
+    Ajusta el texto para que quepa en el espacio disponible.
+    Intenta primero dividir en dos líneas, si no cabe, reduce el tamaño de fuente.
+    """
+    
+    def get_text_size(text, font):
+        """Obtiene el ancho y alto del texto"""
+        bbox = draw.textbbox((0, 0), text, font=font)
+        width = bbox[2] - bbox[0]
+        height = bbox[3] - bbox[1]
+        return width, height
+    
+    def dividir_texto_en_dos_lineas(text):
+        """Divide el texto en dos líneas de manera inteligente"""
+        palabras = text.split()
+        if len(palabras) <= 2:
+            return [text]
+        mitad = len(palabras) // 2
+        linea1 = ' '.join(palabras[:mitad])
+        linea2 = ' '.join(palabras[mitad:])
+        return [linea1, linea2]
+    
+    current_font_size = font_size_inicial
+    
+    try:
+        font = ImageFont.truetype(font_path, current_font_size)
+    except:
+        font = ImageFont.load_default()
+        return [text], font
+    
+    text_width, text_height = get_text_size(text, font)
+    
+    # Caso 1: El texto cabe en una sola línea con el tamaño original
+    if text_width <= max_width and text_height <= max_height:
+        return [text], font
+    
+    # Caso 2: Intentar dividir en dos líneas con el tamaño original
+    lineas = dividir_texto_en_dos_lineas(text)
+    
+    if len(lineas) == 2:
+        ancho_linea1, alto_linea1 = get_text_size(lineas[0], font)
+        ancho_linea2, alto_linea2 = get_text_size(lineas[1], font)
+        max_ancho_lineas = max(ancho_linea1, ancho_linea2)
+        alto_total = (alto_linea1 + alto_linea2) * line_spacing
+        
+        if max_ancho_lineas <= max_width and alto_total <= max_height:
+            return lineas, font
+    
+    # Caso 3: Reducir tamaño de fuente gradualmente
+    for size in range(current_font_size - 5, min_font_size - 1, -5):
+        try:
+            font = ImageFont.truetype(font_path, size)
+        except:
+            continue
+        
+        lineas = dividir_texto_en_dos_lineas(text)
+        
+        if len(lineas) == 2:
+            ancho_linea1, alto_linea1 = get_text_size(lineas[0], font)
+            ancho_linea2, alto_linea2 = get_text_size(lineas[1], font)
+            max_ancho_lineas = max(ancho_linea1, ancho_linea2)
+            alto_total = (alto_linea1 + alto_linea2) * line_spacing
+            
+            if max_ancho_lineas <= max_width and alto_total <= max_height:
+                return lineas, font
+        
+        text_width, text_height = get_text_size(text, font)
+        if text_width <= max_width and text_height <= max_height:
+            return [text], font
+    
+    # Último recurso: usar tamaño mínimo
+    try:
+        font = ImageFont.truetype(font_path, min_font_size)
+    except:
+        font = ImageFont.load_default()
+    
+    return dividir_texto_en_dos_lineas(text), font
+
+def draw_centered_text_adaptive(draw, text, x_center, y_center, font_path, 
+                                font_size_inicial, max_width, max_height,
+                                min_font_size=20, fill="white", line_spacing=1.2):
+    """
+    Dibuja texto centrado con ajuste automático de tamaño y división en líneas.
+    """
+    
+    # Ajustar el texto al espacio disponible
+    lineas, fuente_final = ajustar_texto_inteligente(
+        draw, text, font_path, font_size_inicial, 
+        max_width, max_height, min_font_size, line_spacing
+    )
+    
+    # Calcular dimensiones de cada línea
+    lineas_info = []
+    for linea in lineas:
+        bbox = draw.textbbox((0, 0), linea, font=fuente_final)
+        width = bbox[2] - bbox[0]
+        height = bbox[3] - bbox[1]
+        lineas_info.append({'text': linea, 'width': width, 'height': height})
+    
+    # Calcular el alto total del bloque de texto
+    if len(lineas_info) == 1:
+        total_height = lineas_info[0]['height']
+    else:
+        total_height = sum(info['height'] for info in lineas_info) * line_spacing
+    
+    # Posición Y inicial (ajustada para centrar verticalmente el bloque completo)
+    y_actual = y_center - (total_height / 2)
+    
+    # Dibujar cada línea centrada horizontalmente
+    for i, info in enumerate(lineas_info):
+        x_pos = x_center - (info['width'] / 2)
+        draw.text((x_pos, y_actual), info['text'], fill=fill, font=fuente_final)
+        
+        if i < len(lineas_info) - 1:
+            y_actual += info['height'] * line_spacing
+    
+    return {
+        'lineas': len(lineas),
+        'font_size': fuente_final.size if hasattr(fuente_final, 'size') else font_size_inicial
+    }
+
 def draw_centered_text(draw, text, x_position, y_position, font, fill="white"):
-    # Calcular el ancho del texto
+    """Versión original - mantenida para compatibilidad"""
     bbox = draw.textbbox((0, 0), text, font=font)
     text_width = bbox[2] - bbox[0]
-
-    # Calcular el alto del texto
     bboxY = draw.textbbox((0, 0), text, font=font)
     text_height = bboxY[3] - bboxY[1]
-    
     x_position = x_position - (text_width) / 2
     y_position = y_position - (text_height) / 2
-
-    # Dibujar el texto centrado
     draw.text((x_position, y_position), text, fill=fill, font=font)
 
 # ================================================
@@ -5424,18 +5564,19 @@ with tab5:
             """)
     
     # Selector de tipo de insignia
-    tipo_insignia = st.selectbox(
-        "Selecciona el tipo de insignia:",
-        ["ALUMNO", "DOCENTE"],
-        key="tipo_insignia_selector"
-    )
-    
-    # Upload del archivo Excel
+    tipo_insignia = st.radio(
+            "Selecciona el tipo de insignia a generar:",
+            ["ALUMNO", "DOCENTE"],
+            horizontal=True
+        )
+
+    # Carga del archivo
     uploaded_file = st.file_uploader(
-        f"📄 Sube el archivo Excel con los datos de {tipo_insignia.lower()}s",
-        type=['xlsx'],
-        key="excel_insignias"
-    )
+            f"Sube tu archivo Excel (.xlsx) con los datos de {tipo_insignia.lower()}s",
+            type=["xlsx"],
+            key="insignias_uploader",
+            help="El archivo debe contener las columnas requeridas según el tipo de insignia seleccionado"
+        )
     
     if uploaded_file:
         try:
@@ -5464,7 +5605,10 @@ with tab5:
                 df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace(r'\s+', ' ', regex=True).str.strip()
                 df['IDENTIFICADOR'] = df['IDENTIFICADOR'].str.replace('NAN', '', regex=True).str.strip()
             else:
-                st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO y MATERNO")
+                if tipo_insignia == "ALUMNO":
+                    st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, CURSO y AÑO")
+                else: # DOCENTE
+                    st.error("❌ El archivo debe contener las columnas: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA y AÑO")
                 st.stop()
             
             st.success(f"✅ Archivo cargado correctamente: {len(df)} registros encontrados")
@@ -5473,7 +5617,7 @@ with tab5:
             with st.expander("👁️ Vista previa de los datos"):
                 # Crear una copia sin la columna IDENTIFICADOR para mostrar
                 df_preview = df.drop(columns=['IDENTIFICADOR'])
-                st.dataframe(df_preview.head(10), hide_index=True)
+                st.dataframe(df_preview, hide_index=True)
             
             # Botón para generar insignias
             if st.button("🎨 Generar Insignias PDF", key="generar_insignias", type="primary", use_container_width=True):
@@ -5514,17 +5658,9 @@ with tab5:
                             # Abrir imagen de fondo
                             img = Image.open(imagen_fondo)
                             draw = ImageDraw.Draw(img)
-                            
-                            # Cargar fuente
-                            try:
-                                font_path = "fonts/trebuchet.ttf"
-                                font_nombre = ImageFont.truetype(font_path, 60)
-                                font_curso = ImageFont.truetype(font_path, 60)
-                                font_anio = ImageFont.truetype(font_path, 65)
-                            except:
-                                font_nombre = ImageFont.load_default()
-                                font_curso = ImageFont.load_default()
-                                font_anio = ImageFont.load_default()
+
+                            # Ruta de fuente
+                            font_path = "fonts/trebuchet.ttf"
                             
                             # Preparar variables según el tipo
                             identificador = str(row.get("IDENTIFICADOR", "")).upper()
@@ -5534,18 +5670,87 @@ with tab5:
                             if tipo_insignia == "ALUMNO":
                                 # Variables para alumnos: IDENTIFICADOR, CURSO, AÑO
                                 curso = str(row.get("CURSO", "")).upper()
-                                
-                                draw_centered_text(draw, identificador, 621, 435, font_nombre, fill="white")
-                                draw_centered_text(draw, curso, 621, 677, font_curso, fill="white")
-                                draw_centered_text(draw, ano, 621, 926, font_anio, fill="white")
-                                
+                                    
+                                # Dibujar IDENTIFICADOR con ajuste automático
+                                config_id = CONFIG_INSIGNIAS['IDENTIFICADOR']
+                                draw_centered_text_adaptive(
+                                        draw=draw,
+                                        text=identificador,
+                                        x_center=621,
+                                        y_center=435,
+                                        font_path=font_path,
+                                        font_size_inicial=config_id['font_size_inicial'],
+                                        max_width=config_id['max_width'],
+                                        max_height=config_id['max_height'],
+                                        min_font_size=config_id['min_font_size'],
+                                        fill="white"
+                                    )
+                                    
+                                # Dibujar CURSO con ajuste automático
+                                config_curso = CONFIG_INSIGNIAS['CURSO']
+                                draw_centered_text_adaptive(
+                                        draw=draw,
+                                        text=curso,
+                                        x_center=621,
+                                        y_center=677,
+                                        font_path=font_path,
+                                        font_size_inicial=config_curso['font_size_inicial'],
+                                        max_width=config_curso['max_width'],
+                                        max_height=config_curso['max_height'],
+                                        min_font_size=config_curso['min_font_size'],
+                                        fill="white"
+                                    )
+                                    
+                                # Dibujar AÑO con ajuste automático
+                                config_ano = CONFIG_INSIGNIAS['AÑO']
+                                draw_centered_text_adaptive(
+                                        draw=draw,
+                                        text=ano,
+                                        x_center=621,
+                                        y_center=926,
+                                        font_path=font_path,
+                                        font_size_inicial=config_ano['font_size_inicial'],
+                                        max_width=config_ano['max_width'],
+                                        max_height=config_ano['max_height'],
+                                        min_font_size=config_ano['min_font_size'],
+                                        fill="white"
+                                    )
+                                    
                                 pdf_name = f"ALUMNO_{identificador}.pdf"
-                                
+                                    
                             else:  # DOCENTE
                                 # Variables para docentes: IDENTIFICADOR, AÑO
-                                draw_centered_text(draw, identificador, 621, 435, font_nombre, fill="white")
-                                draw_centered_text(draw, ano, 621, 926, font_anio, fill="white")
-                                
+                                    
+                                # Dibujar IDENTIFICADOR con ajuste automático
+                                config_id = CONFIG_INSIGNIAS['IDENTIFICADOR']
+                                draw_centered_text_adaptive(
+                                        draw=draw,
+                                        text=identificador,
+                                        x_center=641,
+                                        y_center=536,
+                                        font_path=font_path,
+                                        font_size_inicial=config_id['font_size_inicial'],
+                                        max_width=config_id['max_width'],
+                                        max_height=config_id['max_height'],
+                                        min_font_size=config_id['min_font_size'],
+                                        fill="white"
+                                    )
+                                    
+                                # Dibujar AÑO con ajuste automático
+                                config_ano = CONFIG_INSIGNIAS['AÑO']
+                                draw_centered_text_adaptive(
+                                        draw=draw,
+                                        text=ano,
+                                        x_center=641,
+                                        y_center=905,
+                                        font_path=font_path,
+                                        font_size_inicial=config_ano['font_size_inicial'],
+                                        max_width=config_ano['max_width'],
+                                        max_height=config_ano['max_height'],
+                                        min_font_size=config_ano['min_font_size'],
+                                        fill="white"
+                                    )
+                                    
                                 # Nombre del archivo: {TIPO DE INSIGNEA}_IDENTIFICADOR.pdf
                                 # tipo_doc puede ser SENIOR, ESPECIALISTA, etc.
                                 pdf_name = f"{tipo_doc}_{identificador}.pdf"
