@@ -4438,8 +4438,11 @@ with tab3:
     st.info("""
     📌 **INSTRUCCIONES**
     1.	Sube un archivo OK con formato:
+            
         •	{NombreColegio}_1P-3P_OK.xlsx
+            
         •	{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx
+            
     2.	Se generarán PDFs agrupados por: Grado → Sección → Curso
     3.	Cada PDF contendrá la lista completa de estudiantes con sus notas
 
@@ -4654,8 +4657,11 @@ with tab4:
     st.info("""
     📌 **INSTRUCCIONES:**
     1.	Sube un archivo OK con formato:
+            
         •	{NombreColegio}_1P-3P_OK.xlsx
+            
         •	{NombreColegio}_4P-5S_OK_EVALUADOR_REV.xlsx
+            
     2.	Selecciona el tipo de certificado que a generar
     3.	Elige si deseas incluir marca de agua en los certificados
     4.	Se generarán archivos comprimidos con todos los certificados correspondientes
@@ -4941,16 +4947,16 @@ with tab5:
     st.markdown("""
                 **DESCRIPCIÓN:**
                 
-                Permite validar que el archivo devuelto por el evaluador corresponda exactamente al archivo originalmente enviado, verificando que no se hayan realizado modificaciones al contenido y que la única información agregada sean las notas u observaciones del proceso de evaluación.
+                Permite emitir las insignias de reconocimiento a los docentes y alumnos manera automática a partir de la información registrada de diplomados, certificados y constancias, según el archivo cargado. El proceso crea archivos PDF independientes para cada alumno o docente, los cuales pueden descargarse de manera consolidada en un archivo ZIP, facilitando la revisión, distribución y trazabilidad de la información.
                 """)
     st.info("""
     📌 **INSTRUCCIONES**
-    1.	 Columnas base requeridas (Columnas con valores completos):
+    1.	Columnas base requeridas (Columnas con valores completos):
             
-    •	ALUMNO: NOMBRE, PATERNO, MATERNO, CURSO, AÑO.
+        •	ALUMNO: NOMBRE, PATERNO, MATERNO, CURSO, AÑO.
             
-    •	DOCENTE: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA, AÑO.
-            
+        •	DOCENTE: NOMBRE, PATERNO, MATERNO, TIPO DE INSIGNEA, AÑO.
+                    
     ⚠️ **IMPORTANTE**
     1.	Todos los datos se convertirán automáticamente a MAYÚSCULAS.
     2.	La cabecera debe estar en la fila 9 del Excel.
