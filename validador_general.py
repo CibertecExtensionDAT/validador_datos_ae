@@ -143,7 +143,7 @@ if 'fecha_certificado_seleccionada' not in st.session_state:
 if 'tab4_reset_counter' not in st.session_state:
     st.session_state.tab4_reset_counter = 0
 
-# Estados de Certificados
+# Tab 05
 if 'df_procesado' not in st.session_state:
     st.session_state.df_procesado = None
 if 'grupos' not in st.session_state:
@@ -154,6 +154,8 @@ if 'certificados_generados' not in st.session_state:
     st.session_state.certificados_generados = False
 if 'zip_buffer' not in st.session_state:
     st.session_state.zip_buffer = None
+if 'tab5_reset_counter' not in st.session_state:
+    st.session_state.tab5_reset_counter = 0
 
 # ================================================
 # CONSTANTES
@@ -5574,7 +5576,7 @@ with tab5:
     uploaded_file = st.file_uploader(
             f"Sube tu archivo Excel (.xlsx) con los datos de {tipo_insignia.lower()}s",
             type=["xlsx"],
-            key="insignias_uploader",
+            key=f"tab5_uploader_{st.session_state.tab5_reset_counter}",
             help="El archivo debe contener las columnas requeridas según el tipo de insignia seleccionado"
         )
     
@@ -5777,7 +5779,7 @@ with tab5:
                         st.success(f"✅ Se generaron {len(pdf_files)} insignias correctamente")
                         
                         # Crear ZIP
-                        zip_filename = f"insignias_{tipo_insignia.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+                        zip_filename = f"insignias_{tipo_insignia.lower()}.zip"
                         zip_path = os.path.join(temp_dir, zip_filename)
                         
                         with zipfile.ZipFile(zip_path, 'w') as zipf:
@@ -5808,6 +5810,17 @@ with tab5:
                             shutil.rmtree(temp_dir)
                     except:
                         pass
+                    
+            # Botón para generar nuevas insigneas con diferentes opciones
+            st.markdown("---")
+            if st.button("🔄 Limpiar y Generar nuevas Insignias", use_container_width=True, key="btn_regenerar_insigneas"):
+                st.session_state.df_procesado = None
+                st.session_state.grupos = None     
+                st.session_state.plantillas = None   
+                st.session_state.certificados_generados = False
+                st.session_state.zip_buffer = None
+                st.session_state.tab5_reset_counter += 1
+                st.rerun()
                         
         except Exception as e:
             st.error(f"❌ Error al procesar el archivo: {str(e)}")
