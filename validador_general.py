@@ -185,70 +185,79 @@ MAPEO_SECCIONES = {
     "Única": "U"
 }
 LISTA_COLEGIOS = [
-    "Colegio Ateneo la Molina",
-    "Colegio Bárbara Dachille",
-    "Colegio Bautista Filadelfia-Comas",
-    "Colegio Cepeban",
-    "Colegio Cervantes School",
-    "Colegio Divino Maestro de Pro",
-    "Colegio Divino Niño Jesús",
-    "Colegio Don Bosco - San Luis ",
-    "Colegio Dora Mayer",
-    "Colegio El Carmelo",
-    "Colegio Giordano Bruno",
-    "Colegio Gracias Jesús",
-    "Colegio Ingeniero Carlos Lisson Beingolea",
-    "Colegio Innova America High School",
-    "Colegio Joseph Novak",
-    "Colegio Loris Malaguzzi",
-    "Colegio Los Rosales de Santa Rosa",
-    "Colegio Maestro Redentor - Huancayo ",
-    "Colegio Mahatma Gandhi",
-    "Colegio Makarenko",
-    "Colegio María Inmaculada Concepción",
-    "Colegio Mashal School",
-    "Colegio Miguel Angel",
-    "Colegio My Home And School",
-    "Colegio Nuestra Señora Carmen de Palao",
-    "Colegio Parroquial San José",
-    "Colegio Redimer Jesús De Villa",
-    "Colegio San Francisco -Balconcillo ",
-    "Colegio San José de los Balnearios Del Sur",
-    "Colegio San Martincito de Porres",
-    "Colegio Santa Ana - Tacna",
-    "Colegio Santa Angela Merici",
-    "Colegio Santa María de Surco",
-    "Colegio Signos de La Fe La Salle - Trujillo ",
-    "Colegio Sor Querubina de San Pedro",
-    "Colegio Andino Huancayo",
-    "Colegio Andre Malraux",
-    "Colegio Antares",
-    "Colegio Divina Misericordia",
-    "Colegio Ingeniería Huancayo",
-    "Colegio Jesús el Nazareno",
-    "Colegio Jesús María - San Martín de Porres",
-    "Colegio Lima International School Of Tomorrow",
-    "Colegio Lincoln del Triunfo",
-    "Colegio Luz Casanova",
-    "Colegio Magister",
-    "Colegio María Montessori de Copacabana",
-    "Colegio María Rafols",
-    "Colegio Melvin Jones",
-    "Colegio Nuestra Señora del Buen Consejo",
-    "Colegio Patrocinio San José",
-    "Colegio Peruano Japones La Victoria",
-    "Colegio Play School Huaral",
-    "Colegio San Antonio de Padua",
-    "Colegio San Antonio María Claret",
-    "Colegio San Charbel",
-    "Colegio San Francisco de Borja",
-    "Colegio San Germán",
-    "Colegio San José Hermanos Maristas Callao",
-    "Colegio San Mateo Anglicano",
-    "Colegio Santa Ana - Lima",
-    "Colegio Santa Angela",
-    "Colegio Santa Anita",
-    "Colegio Santa Rosa de Lima"
+    "COLEGIO ANDINO",
+    "COLEGIO ANNIES SCHOOL",
+    "COLEGIO ANTARES",
+    "COLEGIO ATENEO",
+    "COLEGIO BARBARA D'ACHILLE",
+    "COLEGIO BUENAS NUEVAS",
+    "COLEGIO CEPEBAN",
+    "COLEGIO CERVANTES SCHOOL",
+    "COLEGIO CRISTIANO PIONERO",
+    "COLEGIO DIVINA MISERICORDIA",
+    "COLEGIO DIVINO MAESTRO DE PRO",
+    "COLEGIO DIVINO NIÑO JESÚS",
+    "COLEGIO DON BOSCO",
+    "COLEGIO DORA MAYER",
+    "COLEGIO EL CARMELO",
+    "COLEGIO EL SEMBRADOR",
+    "COLEGIO ELIM",
+    "COLEGIO GIORDANO BRUNO",
+    "COLEGIO GRACIAS JESUS",
+    "COLEGIO INGENIERÍA",
+    "COLEGIO INTEGRA COLLEGE",
+    "COLEGIO JESÚS DEL PROGRESO",
+    "COLEGIO JESÚS EL NAZARENO",
+    "COLEGIO JESÚS MARÍA",
+    "COLEGIO JORDAN DE JESUS",
+    "COLEGIO JOSE MARIA ARGUEDAS",
+    "COLEGIO JOSEPH NOVAK",
+    "COLEGIO JUAN ENRIQUE NEWMAN",
+    "COLEGIO LISOFT",
+    "COLEGIO LISSON",
+    "COLEGIO LORIS MALAGUZZI",
+    "COLEGIO LOS ROSALES DE SANTA ROSA",
+    "COLEGIO LUZ CASANOVA",
+    "COLEGIO MAESTRO REDENTOR",
+    "COLEGIO MAGISTER",
+    "COLEGIO MAKARENKO",
+    "COLEGIO MARCELINO CHAMPAGNAT",
+    "COLEGIO MARIA DE LAS MERCEDES (MIRAFLORES)",
+    "COLEGIO MARIA DE LAS MERCEDES (LA VICTORIA)",
+    "COLEGIO MARIA RAFOLS",
+    "COLEGIO MARISTAS",
+    "COLEGIO MASHAL SCHOOL",
+    "COLEGIO MELVIN JONES",
+    "COLEGIO MI AMIGO JESUS",
+    "COLEGIO MIGUEL ANGEL",
+    "COLEGIO MUNDIAL",
+    "COLEGIO MY HOME AND SCHOOL",
+    "COLEGIO NUESTRA SEÑORA DEL CARMEN DE PALAO",
+    "COLEGIO NUESTRA SEÑORA DEL BUEN CONSEJO",
+    "COLEGIO PARROQUIAL SAN JOSE",
+    "COLEGIO PERUANO JAPONÉS LA VICTORIA",
+    "COLEGIO PLAY SCHOOL",
+    "COLEGIO REDIMER JESUS",
+    "COLEGIO SAN ANTONIO DE PADUA",
+    "COLEGIO SAN ANTONIO MARÍA CLARET",
+    "COLEGIO SAN CHARBEL",
+    "COLEGIO SAN FRANCISCO DE BORJA",
+    "COLEGIO SAN GERMAN",
+    "COLEGIO SAN IGNACIO DE LOYOLA (MIRAFLORES)",
+    "COLEGIO SAN IGNACIO DE LOYOLA (VILLA)",
+    "COLEGIO SAN JUAN DE BARRANCO",
+    "COLEGIO SAN MARTINCITO",
+    "COLEGIO SANTA ANA DE LOS JARDINES",
+    "COLEGIO SANTA ANA INGENIERIA",
+    "COLEGIO SANTA ANA (LIMA)",
+    "COLEGIO SANTA ANA (TACNA)",
+    "COLEGIO SANTA ANGELA MERICI",
+    "COLEGIO SANTA ANITA",
+    "COLEGIO SANTA MARIA DE SURCO",
+    "COLEGIO SHONA",
+    "COLEGIO SANTA ROSA DE LIMA",
+    "COLEGIO TRAVESURAS TRAZOS Y COLORES",
+    "COLEGIO VIRGEN DEL ROSARIO YUNGAY"
 ]
 
 CONFIG_INSIGNIAS = {
@@ -749,7 +758,11 @@ def guardar_con_formato_original(df_procesado, archivo_original_bytes, nombre_ho
         if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
             columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
         df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
-    
+
+    # Renumerar columna NRO. en orden ascendente si existe
+    if 'NRO.' in df_procesado.columns:
+        df_procesado['NRO.'] = range(1, len(df_procesado) + 1)
+
     wb = load_workbook(BytesIO(archivo_original_bytes))
     
     if nombre_hoja is None or nombre_hoja not in wb.sheetnames:
@@ -858,6 +871,11 @@ def guardar_evaluador_con_multiples_hojas(archivo_original_bytes, dict_hojas_pro
             if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
                 columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
             df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
+
+        # Renumerar columna NRO. en orden ascendente si existe
+        if 'NRO.' in df_procesado.columns:
+            df_procesado['NRO.'] = range(1, len(df_procesado) + 1)
+
         fila_cabecera = datos['fila_cabecera']
         
         if nombre_hoja not in wb.sheetnames:
@@ -1528,7 +1546,11 @@ def guardar_certificado_con_encabezado(archivo_original_bytes, dict_hojas_proces
             if 'NOMBRES' in df_procesado.columns or 'NOMBRE' in df_procesado.columns:
                 columnas_orden.append('NOMBRES' if 'NOMBRES' in df_procesado.columns else 'NOMBRE')
             df_procesado = df_procesado.sort_values(columnas_orden).reset_index(drop=True)
-        
+
+        # Renumerar columna NRO. en orden ascendente si existe
+        if 'NRO.' in df_procesado.columns:
+            df_procesado['NRO.'] = range(1, len(df_procesado) + 1)
+
         ws_nueva = wb_nuevo.create_sheet(title=nombre_hoja)
 
         celda_estilo_referencia = None
