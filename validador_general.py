@@ -2497,7 +2497,7 @@ with tab1:
     st.markdown("### Detecta diferencias entre dos versiones del archivo de Nómina")
 
     st.markdown("""
-    <div style='background-color: #172c42; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+    <div style='background-color: #172c42; color: #FFFFFF; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
         <h4>📋 ¿Cómo funciona esta herramienta?</h4>
         <p>Sube dos versiones del archivo de <strong>Nómina de Alumnos</strong> (el mismo formato que usa el Tab 🔍 Validador de Notas de Laboratorio).
         El sistema comparará ambas nóminas e identificará:</p>
@@ -2787,7 +2787,7 @@ with tab2:
         st.header("🏫 Paso 1: Información del Colegio")
 
         st.markdown("""
-            <div style='background-color: #172c42; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+            <div style='background-color: #172c42; color: #FFFFFF; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
                 <h4>Bienvenido al sistema de validación</h4>
                 <p>Para comenzar, ingresa el Nombre del colegio. Este Nombre se usará para identificar los archivos descargables.</p>
             </div>
