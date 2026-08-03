@@ -1073,7 +1073,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 total_alumnos = len(grupo_df_sorted)
                 aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
-                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') == 20])
+                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 19.5])
                 promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
                 promedio = round(promedio, 2)
                 
@@ -1128,7 +1128,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 total_alumnos = len(grupo_df_sorted)
                 aprobados = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 12.5])
                 desaprobados = total_alumnos - aprobados
-                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') == 20])
+                excelencia = len(grupo_df_sorted[pd.to_numeric(grupo_df_sorted['NOTA FINAL'], errors='coerce') >= 19.5])
                 promedio = pd.to_numeric(grupo_df_sorted["NOTA FINAL"], errors="coerce").mean()
                 promedio = round(promedio, 2)
 
