@@ -1083,7 +1083,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                     nota_original = row['NOTA FINAL']
                     try:
                         nota_float = float(nota_original)
-                        nota_redondeada = int(round(nota_float))
+                        nota_redondeada = int(nota_float + 0.5) #int(round(nota_float))
                     except (ValueError, TypeError):
                         nota_redondeada = nota_original
                     
