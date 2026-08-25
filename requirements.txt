@@ -1,5 +1,5 @@
 # ===================================
-# DEPENDENCIAS PRINCIPALES (PROYECTO BASE)
+# DEPENDENCIAS PRINCIPALES
 # ===================================
 altair==5.5.0
 attrs==25.4.0
@@ -42,11 +42,7 @@ urllib3==2.5.0
 watchdog==6.0.0
 
 # ===================================
-# DEPENDENCIAS NUEVAS (SUBMÓDULO APP)
+# PDFs
 # ===================================
-# Librerías para generación de PDFs
 reportlab==4.4.2
-fpdf==1.7.2
-PyMuPDF==1.24.2
-PyMuPDFb==1.24.1
 PyPDF2==3.0.1
