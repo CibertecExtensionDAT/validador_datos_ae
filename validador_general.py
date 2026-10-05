@@ -67,7 +67,7 @@ if "archivo2_4p5s_fila_cabecera" not in st.session_state:
 if "cursos_equivalentes" not in st.session_state:
     st.session_state.cursos_equivalentes = [
     "ADOBE ILLUSTRATOR",
-    "ADOBE INDESING",
+    "ADOBE INDESIGN",
     "ADOBE PHOTOSHOP PROFICIENT",
     "COACHING PERSONAL Y VOCACIONAL",
     "CODE FOR KIDS",
@@ -292,6 +292,39 @@ CONFIG_INSIGNIAS = {
                 'min_font_size': 40
             }
         }
+
+# Cursos que deben mostrarse con una grafía específica (marca registrada, etc.)
+# Clave: nombre canónico en MAYÚSCULAS | Valor: cómo debe verse impreso/en pantalla
+CURSOS_FORMATO_ESPECIAL = {
+    "ADOBE INDESIGN": "Adobe InDesign",
+}
+
+def _normalizar_curso(curso):
+    """Mayúsculas y espacios simples (forma canónica usada en validaciones)."""
+    if pd.isna(curso):
+        return ""
+    return ' '.join(str(curso).strip().upper().split())
+
+def formatear_curso_salida(curso):
+    """
+    Nombre del curso para certificados, constancias, reportes e insignias.
+    Por defecto en MAYÚSCULAS; si está en CURSOS_FORMATO_ESPECIAL usa su grafía.
+    """
+    curso_norm = _normalizar_curso(curso)
+    return CURSOS_FORMATO_ESPECIAL.get(curso_norm, curso_norm)
+
+def aplicar_formato_curso_vista(df):
+    """
+    Devuelve una COPIA del DataFrame con la columna CURSO formateada para mostrar
+    en pantalla. Solo cambia los cursos especiales; el resto queda intacto.
+    """
+    df_vista = df.copy()
+    for col in df_vista.columns:
+        if str(col).strip().upper() == "CURSO":
+            df_vista[col] = df_vista[col].apply(
+                lambda v: CURSOS_FORMATO_ESPECIAL.get(_normalizar_curso(v), v) if pd.notna(v) else v
+            )
+    return df_vista
 
 def detectar_cabecera_automatica(df: pd.DataFrame, columnas_objetivo: list):
     """Detecta automáticamente la fila de cabecera"""
@@ -1065,7 +1098,7 @@ def generar_reportes_pdf(df, nombre_colegio, tipo_archivo):
                 story.append(Paragraph(f"<b>Colegio:</b> {nombre_colegio}", style_subtitle))
                 story.append(Paragraph(f"<b>Ciclo:</b> {tipo_archivo}", style_subtitle))
                 story.append(Paragraph(f"<b>Grado:</b> {grado} | <b>Sección:</b> {seccion}", style_subtitle))
-                story.append(Paragraph(f"<b>Curso:</b> {curso}", style_subtitle))
+                story.append(Paragraph(f"<b>Curso:</b> {formatear_curso_salida(curso)}", style_subtitle))
                 story.append(Spacer(1, 5*mm))
                 
                 grupo_df_sorted = grupo_df.sort_values(['PATERNO', 'MATERNO', 'NOMBRES'])
@@ -2075,7 +2108,8 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
     for i, row in grupo_df.iterrows():
         try:
             nombre = str(row["nombre_certificado"]).strip().upper()
-            curso = str(row["curso"]).strip().upper()
+            curso_base = _normalizar_curso(row["curso"])      # para nombres de archivo
+            curso = formatear_curso_salida(curso_base)         # para lo impreso en el PDF
 
             fecha_seleccionada = st.session_state.get('fecha_certificado_seleccionada', datetime.now().date())
             if isinstance(fecha_seleccionada, datetime):
@@ -2121,9 +2155,9 @@ def generar_certificados_grupo(grupo_df, plantilla_bytes, plantilla_key, nombre_
                 pdf_bytes = pdf_buffer.getvalue()
 
             if plantilla_key == 'fondo_2':
-                pdf_name = f"Constancias/{nombre.strip().replace(' ', '_') + '_' + curso[0:11].replace(' ', '_')}.pdf"
+                pdf_name = f"Constancias/{nombre.strip().replace(' ', '_') + '_' + curso_base[0:11].replace(' ', '_')}.pdf"
             else:
-                pdf_name = f"{nombre.strip().replace(' ', '_') + '_' + curso[0:11].replace(' ', '_')}.pdf"
+                pdf_name = f"{nombre.strip().replace(' ', '_') + '_' + curso_base[0:11].replace(' ', '_')}.pdf"
 
             zip_file.writestr(pdf_name, pdf_bytes)
 
@@ -3244,6 +3278,7 @@ with tab2:
                                             equivalencias_1p3p[curso] = st.selectbox(
                                                 f"📌 **{curso}**",
                                                 options=["-- Seleccionar --"] + st.session_state.cursos_equivalentes,
+                                                format_func=lambda x: x if x == "-- Seleccionar --" else formatear_curso_salida(x),
                                                 key=f"eq_1p3p_{curso}"
                                             )
                                         
@@ -3279,7 +3314,7 @@ with tab2:
                                     df_1p3p_procesado = df_1p3p
                                     df_vp_1p3p = df_1p3p.copy().drop(columns=["Nro."], errors="ignore")
 
-                                    st.dataframe(df_vp_1p3p, use_container_width=True, hide_index=True)
+                                    st.dataframe(aplicar_formato_curso_vista(df_vp_1p3p), use_container_width=True, hide_index=True)
                             
                         else:
                             st.error("❌ Error de cabecera en la hoja 1P-3P")
@@ -3369,6 +3404,7 @@ with tab2:
                                             equivalencias[curso] = st.selectbox(
                                                 f"📌 **{curso}**",
                                                 options=["-- Seleccionar --"] + st.session_state.cursos_equivalentes,
+                                                format_func=lambda x: x if x == "-- Seleccionar --" else formatear_curso_salida(x),
                                                 key=f"eq_{curso}"
                                             )
                                         
@@ -3410,7 +3446,7 @@ with tab2:
                                     df_4p5s_procesado = df2
                                     df_vp_4p5s = df2.copy().drop(columns=["Nro.", "NOTAS VIGESIMALES 75%", "PROMEDIO"], errors="ignore")
                                     
-                                    st.dataframe(df_vp_4p5s, use_container_width=True, hide_index=True)
+                                    st.dataframe(aplicar_formato_curso_vista(df_vp_4p5s), use_container_width=True, hide_index=True)
                         else:
                             st.error("❌ Error de cabecera en la hoja 4P-5S")
                             st.warning("⚠️ No se pudo detectar cabecera automáticamente en 4P-5S")
@@ -4490,7 +4526,7 @@ with tab3:
                     st.error(f"❌ {error_base}")
                 elif df_err is not None:
                     st.error(f"❌ Se encontraron {len(df_err)} filas con errores de validación")
-                    st.dataframe(df_err, use_container_width=True, hide_index=True)
+                    st.dataframe(aplicar_formato_curso_vista(df_err), use_container_width=True, hide_index=True)
                 else:
                     st.session_state.comparador_archivo_base = {
                         'df': df_base,
@@ -4503,7 +4539,7 @@ with tab3:
             
             if st.session_state.comparador_archivo_base:
                 with st.expander("Vista previa - OK", expanded=False):
-                    st.dataframe(st.session_state.comparador_archivo_base['df'].head(10), hide_index=True)
+                    st.dataframe(aplicar_formato_curso_vista(st.session_state.comparador_archivo_base['df'].head(10)), hide_index=True)
         else:
             st.info("⬆️ Por favor, sube el archivo OK para continuar")
             if st.session_state.comparador_archivo_base is not None:
@@ -4563,7 +4599,7 @@ with tab3:
                     st.error(f"❌ {error_revisar}")
                 elif df_err is not None:
                     st.error(f"❌ Se encontraron {len(df_err)} filas con errores de validación")
-                    st.dataframe(df_err, use_container_width=True, hide_index=True)
+                    st.dataframe(aplicar_formato_curso_vista(df_err), use_container_width=True, hide_index=True)
                     
                     st.divider()
                     csv = df_err.to_csv(index=False).encode('utf-8-sig')
@@ -4587,7 +4623,7 @@ with tab3:
             
             if st.session_state.comparador_archivo_revisar:
                 with st.expander("Vista previa - OK_EVALUADOR", expanded=False):
-                    st.dataframe(st.session_state.comparador_archivo_revisar['df'].head(10), hide_index=True)
+                    st.dataframe(aplicar_formato_curso_vista(st.session_state.comparador_archivo_revisar['df'].head(10)), hide_index=True)
 
         else:
             st.info("⬆️ Por favor, sube el archivo OK_EVALUADOR para continuar")
@@ -4624,7 +4660,7 @@ with tab3:
                 st.caption("Estas son las filas que presentan uno o más errores. Revisa cada valor.")
                 
                 st.dataframe(
-                    df_errores,
+                    aplicar_formato_curso_vista(df_errores),
                     use_container_width=True,
                     height=400
                 )
@@ -4910,7 +4946,7 @@ with tab4:
                             
                             if not df_problematico.empty:
                                 st.markdown(f"**Registros con '{error['columna']}' vacío:**")
-                                st.dataframe(df_problematico.head(10), hide_index=True)
+                                st.dataframe(aplicar_formato_curso_vista(df_problematico.head(10)), hide_index=True)
                         else:
                             st.error(error)
                     
@@ -4931,7 +4967,7 @@ with tab4:
                 
                 st.markdown("---")
                 st.markdown("### 📊 Vista previa de datos")
-                st.dataframe(df_reporte, hide_index=True)
+                st.dataframe(aplicar_formato_curso_vista(df_reporte), hide_index=True)
                 
                 st.markdown("---")
                 st.markdown("### 📊 Agrupación de Datos")
@@ -4953,7 +4989,7 @@ with tab4:
                         grupos_info.append({
                             'Grado': grado,
                             'Sección': seccion,
-                            'Curso': curso,
+                            'Curso': formatear_curso_salida(curso),
                             'Estudiantes': len(grupo_df)
                         })
                     st.dataframe(pd.DataFrame(grupos_info), hide_index=True)
@@ -5184,7 +5220,7 @@ with tab5:
                         df_mostrar = df_procesado.copy()
                         df_mostrar.columns = df_mostrar.columns.str.upper()
                         
-                        st.dataframe(df_mostrar, hide_index=True)
+                        st.dataframe(aplicar_formato_curso_vista(df_mostrar), hide_index=True)
                         st.session_state.plantillas = cargar_plantillas()
                         
                         tipo_certificado_actual = st.session_state.get('tipo_certificado_seleccionado', 'Regular')
@@ -5405,7 +5441,7 @@ with tab6:
             
             with st.expander("👁️ Vista previa de los datos"):
                 df_preview = df.drop(columns=['IDENTIFICADOR'])
-                st.dataframe(df_preview, hide_index=True)
+                st.dataframe(aplicar_formato_curso_vista(df_preview), hide_index=True)
             
             if st.button("🎨 Generar Insignias PDF", key="generar_insignias", type="primary", use_container_width=True):
                 with st.spinner("Generando insignias..."):
@@ -5443,7 +5479,7 @@ with tab6:
                             tipo_doc = str(row.get("TIPO DE INSIGNEA", "ALUMNO")).upper()
                             
                             if tipo_insignia == "ALUMNO":
-                                curso = str(row.get("CURSO", "")).upper()
+                                curso = formatear_curso_salida(row.get("CURSO", ""))
 
                                 config_id = CONFIG_INSIGNIAS['IDENTIFICADOR']
                                 draw_centered_text_adaptive(
