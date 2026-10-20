@@ -296,7 +296,7 @@ CONFIG_INSIGNIAS = {
 # Cursos que deben mostrarse con una grafía específica (marca registrada, etc.)
 # Clave: nombre canónico en MAYÚSCULAS | Valor: cómo debe verse impreso/en pantalla
 CURSOS_FORMATO_ESPECIAL = {
-    "ADOBE INDESIGN": "Adobe InDesign",
+    #"ADOBE INDESIGN": "Adobe InDesign",
 }
 
 def _normalizar_curso(curso):
